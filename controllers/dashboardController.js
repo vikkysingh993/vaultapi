@@ -1,5 +1,5 @@
 const db = require("../models");
-
+const { Sequelize } = require('sequelize'); // 👈 Add this
 const User = db.User;
 const Token = db.Token;
 const TokenTransfer = db.TokenTransfer;
@@ -10,33 +10,40 @@ const TokenTransfer = db.TokenTransfer;
  */
 exports.getDashboardStats = async (req, res) => {
   try {
-    // 👤 Total users
-    const totalUsers = await User.count();
+    const usersResult = await db.pool.query(
+      `SELECT COUNT(*)::int AS total FROM users`
+    );
 
-    // 🪙 Total launched tokens
-    const totalTokens = await Token.count();
+    const tokensResult = await db.pool.query(
+      `SELECT COUNT(*)::int AS total FROM tokens`
+    );
 
-    // 🔒 Total claimed stake plans
-    const claimedPlans = await TokenTransfer.count({
-      where: {
-        status: "CLAIMED", // 👈 important
-        isClaimed: true,
-      },
-    });
+    const claimedResult = await db.pool.query(
+      `
+      SELECT COUNT(*)::int AS total
+      FROM token_transfers
+      WHERE status = 'CLAIMED'
+        AND "isClaimed" = true
+      `
+    );
 
     return res.json({
       success: true,
       data: {
-        users: totalUsers,
-        tokens: totalTokens,
-        claimedPlans: claimedPlans,
+        users: usersResult.rows[0].total,
+        tokens: tokensResult.rows[0].total,
+        claimedPlans: claimedResult.rows[0].total,
       },
     });
+
   } catch (error) {
-    console.error("Dashboard API Error:", error);
+    console.error("❌ Dashboard API Error:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to load dashboard data",
     });
   }
 };
+
+
+

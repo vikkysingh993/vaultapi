@@ -363,22 +363,33 @@ const authLogin = async (req, res) => {
 };
 const adminLogin = async (req, res) => {
   try {
-    console.log(`📱 Admin login attempt for: ${req.body}`);
+    console.log(`📱 Admin login attempt:`, req.body);
     const { email, password } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ message: "Email & password required" });
     }
 
+    // DEBUG: Email check
+    console.log('🔍 Searching for user with email:', email);
+    
     const user = await User.findByEmail(email);
+    console.log('👤 User found:', !!user, user ? { id: user.id, email: user.email } : 'null');
 
     if (!user) {
+      console.log('❌ User not found');
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
+    // DEBUG: Password check
+    console.log('🔑 Plain password:', password.substring(0, 3) + '...');
+    console.log('🔐 DB hash:', user.password.substring(0, 20) + '...');
+    
     const isMatch = await bcrypt.compare(password, user.password);
+    console.log('✅ Password match:', isMatch);
 
     if (!isMatch) {
+      console.log('❌ Password mismatch');
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
@@ -398,10 +409,11 @@ const adminLogin = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
+    console.error('💥 Login error:', error);
     res.status(500).json({ message: "Server error" });
   }
 };
+
 const getProfile = async (req, res) => {
   try {
     const user = req.user;

@@ -46,7 +46,7 @@ const getPlanById = async (req, res) => {
       });
     }
 
-    const plan = await Plan.findByPk(id);
+    const plan = await Plan.findById(id);
 
     if (!plan) {
       return res.status(404).json({
@@ -124,20 +124,30 @@ const createPlan = async (req, res) => {
 
 // UPDATE PLAN
 const updatePlan = async (req, res) => {
-  const { months, price, apy, status } = req.body;
-  await Plan.update(
-    { months, price, apy, status },
-    { where: { id: req.params.id } }
-  );
-  res.json({ success: true });
+  try {
+    const id = Number(req.params.id);
+    const { months, price, apy, status } = req.body;
+
+    const plan = await Plan.update(id, {
+      months,
+      price,
+      apy,
+      status,
+    });
+
+    res.json({ success: true, data: plan });
+  } catch (err) {
+    console.error("❌ updatePlan error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
 };
+
 
 // DELETE PLAN
 const deletePlan = async (req, res) => {
   // await Plan.destroy({ where: { id: req.params.id } });
-  await Plan.update(
-  { is_active: false },
-  { where: { id: req.params.id } }
+  await Plan.update(req.params.id,
+  { status: 'INACTIVE' }
 );
   res.json({ success: true });
 };

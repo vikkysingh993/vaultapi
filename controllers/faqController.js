@@ -49,21 +49,43 @@ exports.updateFaq = async (req, res) => {
     const { id } = req.params;
     const { question, answer, status } = req.body;
 
-    const faq = await Faq.findByPk(id);
-    if (!faq) {
-      return res.status(404).json({ success: false, message: "FAQ not found" });
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "FAQ id is required",
+      });
     }
 
-    await faq.update({ question, answer, status });
+    // 🔍 check exists
+    const faq = await Faq.findById(id);
+    if (!faq) {
+      return res.status(404).json({
+        success: false,
+        message: "FAQ not found",
+      });
+    }
+
+    // ✅ pg-style update
+    const updatedFaq = await Faq.update(id, {
+      question,
+      answer,
+      status,
+    });
 
     res.json({
       success: true,
       message: "FAQ updated successfully",
+      data: updatedFaq,
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("❌ updateFaq error:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
+
 
 /* ======================
    DELETE FAQ
@@ -72,18 +94,35 @@ exports.deleteFaq = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const faq = await Faq.findByPk(id);
-    if (!faq) {
-      return res.status(404).json({ success: false, message: "FAQ not found" });
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "FAQ id is required",
+      });
     }
 
-    await faq.destroy();
+    // 🔍 check exists
+    const faq = await Faq.findById(id);
+    if (!faq) {
+      return res.status(404).json({
+        success: false,
+        message: "FAQ not found",
+      });
+    }
+
+    // ❌ Sequelize destroy() nahi
+    await Faq.delete(id);
 
     res.json({
       success: true,
       message: "FAQ deleted successfully",
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("❌ deleteFaq error:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
+
