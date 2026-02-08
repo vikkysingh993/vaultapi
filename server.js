@@ -1,6 +1,8 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
+const rateLimit = require("express-rate-limit");
+
 
 // Load env vars FIRST before requiring models
 dotenv.config();
@@ -27,11 +29,31 @@ const app = express();
 // Body parser
 app.use(express.json());
 
+
 // Enable CORS
 app.use(cors());
 
+// 🔒 GLOBAL RATE LIMIT (API protection)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // 100 requests per IP
+  message: {
+    success: false,
+    message: "Too many requests, please try again later."
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use("/api", apiLimiter);
+
+
 // Mount routers
 app.use('/api/auth', authRoutes);
+// app.use("/api/auth", rateLimit({
+//   windowMs: 15 * 60 * 1000,
+//   max: 20
+// }));
 app.use('/api/plans', plansRoutes);
 app.use('/api/coins', coinRoutes);
 app.use('/api/wallet', walletRoutes);

@@ -79,10 +79,10 @@ export const autoLiquidityAndLock = async (
 
   /* ---- PRE CHECKS (NO GAS WASTE) ---- */
 
-  const ethBal = await provider.getBalance(wallet.address);
-  if (ethBal < ethers.parseEther("0.01")) {
-    throw new Error("Backend wallet ETH too low for liquidity");
-  }
+  // const ethBal = await provider.getBalance(wallet.address);
+  // if (ethBal < ethers.parseEther("0.01")) {
+  //   throw new Error("Backend wallet ETH too low for liquidity");
+  // }
 
   // const amtA = await parseAmount(tokenAContract, amountA);
   // const amtB = await parseAmount(tokenBContract, amountB);
