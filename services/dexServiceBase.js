@@ -61,6 +61,14 @@ async function safeApprove(token, spender, amount) {
   }
 }
 
+function dexError(message, status = 400, code = "DEX_ERROR") {
+  const err = new Error(message);
+  err.statusCode = status;
+  err.code = code;
+  return err;
+}
+
+
 /* ================= MAIN ================= */
 
 export const autoLiquidityAndLock = async (
@@ -69,7 +77,7 @@ export const autoLiquidityAndLock = async (
   amountA,
   amountB
 ) => {
-  console.log("AUTO LIQUIDITY START");
+  console.log("AUTO LIQUIDITY START Base", tokenA, tokenB, amountA, amountB);
 
   const A = ethers.getAddress(tokenA);
   const B = ethers.getAddress(tokenB);
@@ -79,19 +87,19 @@ export const autoLiquidityAndLock = async (
 
   /* ---- PRE CHECKS (NO GAS WASTE) ---- */
 
-  const ethBal = await provider.getBalance(wallet.address);
-  if (ethBal < ethers.parseEther("0.01")) {
-    throw new Error("Backend wallet ETH too low for liquidity");
-  }
+  // const ethBal = await provider.getBalance(wallet.address);
+  // if (ethBal < ethers.parseEther("0.01")) {
+  //   throw new Error("Backend wallet ETH too low for liquidity");
+  // }
 
-  const amtA = await parseAmount(tokenAContract, amountA);
-  const amtB = await parseAmount(tokenBContract, amountB);
+  const amtA = await parseAmount(tokenAContract, 0.001);
+  const amtB = await parseAmount(tokenBContract, 0.001);
 
   const balA = await tokenAContract.balanceOf(wallet.address);
   const balB = await tokenBContract.balanceOf(wallet.address);
 
-  if (balA < amtA) throw new Error("Insufficient TokenA balance");
-  if (balB < amtB) throw new Error("Insufficient TokenB balance");
+  if (balA < amtA) throw dexError("Insufficient TokenA balance", 400, "INSUFFICIENT_BALANCE");
+  if (balB < amtB) throw dexError("Insufficient TokenB balance", 400, "INSUFFICIENT_BALANCE");
 
   /* ---- APPROVE SAFE ---- */
 
@@ -122,8 +130,9 @@ export const autoLiquidityAndLock = async (
   }
 
   if (pair === ethers.ZeroAddress) {
-    throw new Error("Pair not created");
-  }
+  throw dexError("Liquidity pair not created", 422, "PAIR_NOT_FOUND");
+}
+
 
   /* ---- LOCK LP ---- */
 

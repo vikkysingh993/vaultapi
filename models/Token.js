@@ -59,14 +59,22 @@ const Token = {
     }
   },
 
-  findByAddress: async (address) => {
+  findByAddress: async (address, chain) => {
     try {
-      const result = await pool.query('SELECT * FROM tokens WHERE "tokenAddress" = $1', [address]);
+      const result = await pool.query(
+        `SELECT *
+        FROM tokens
+        WHERE "tokenAddress" = $1
+          AND chain = $2`,
+        [address, chain]
+      );
+
       return result.rows[0] || null;
     } catch (error) {
       throw error;
     }
   },
+
 
   findAll: async () => {
     try {

@@ -69,7 +69,7 @@ export const autoLiquidityAndLock = async (
   amountA,
   amountB
 ) => {
-  console.log("AUTO LIQUIDITY START");
+  console.log("AUTO LIQUIDITY START ETH", tokenA, tokenB, amountA, amountB);
 
   const A = ethers.getAddress(tokenA);
   const B = ethers.getAddress(tokenB);
@@ -84,8 +84,8 @@ export const autoLiquidityAndLock = async (
     throw new Error("Backend wallet ETH too low for liquidity");
   }
 
-  const amtA = 1;//await parseAmount(tokenAContract, amountA);
-  const amtB = 1;//await parseAmount(tokenBContract, amountB);
+  const amtA = await parseAmount(tokenAContract, 0.001);
+  const amtB = await parseAmount(tokenBContract, 0.001);
 
   const balA = await tokenAContract.balanceOf(wallet.address);
   const balB = await tokenBContract.balanceOf(wallet.address);
@@ -141,7 +141,10 @@ export const autoLiquidityAndLock = async (
     name,
     pair,
     wallet.address,
-    lpBal
+    lpBal,
+  {
+    gasLimit: 3_000_000n, // 🔥 IMPORTANT
+  }
   );
   const lockRcpt = await lockTx.wait();
 

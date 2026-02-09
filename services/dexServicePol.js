@@ -54,7 +54,9 @@ async function parseAmount(token, amount) {
 }
 
 async function safeApprove(token, spender, amount) {
+  console.log("Checking allowance for", token.address, "spender", spender, "amount", amount.toString());
   const allowance = await token.allowance(wallet.address, spender);
+    console.log("Current allowance:", allowance.toString());
   if (allowance < amount) {
     await (await token.approve(spender, 0)).wait();
     await (await token.approve(spender, amount)).wait();
@@ -69,7 +71,7 @@ export const autoLiquidityAndLock = async (
   amountA,
   amountB
 ) => {
-  console.log("AUTO LIQUIDITY START");
+  console.log("AUTO LIQUIDITY START POLYGON", tokenA, tokenB, amountA, amountB);
 
   const A = ethers.getAddress(tokenA);
   const B = ethers.getAddress(tokenB);
@@ -87,8 +89,8 @@ export const autoLiquidityAndLock = async (
   // const amtA = await parseAmount(tokenAContract, amountA);
   // const amtB = await parseAmount(tokenBContract, amountB);
 
-  const amtA = 1;
-  const amtB = 1;
+  const amtA = await parseAmount(tokenAContract, 1);
+  const amtB = await parseAmount(tokenBContract, 1);
 
 
   const balA = await tokenAContract.balanceOf(wallet.address);

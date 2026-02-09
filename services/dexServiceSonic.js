@@ -1,10 +1,8 @@
 import { ethers } from "ethers";
 
 /* ================= ENV ================= */
-
 const RPC_URL = process.env.RPC_URL_SONIC;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
-
 const ROUTER_ADDRESS = process.env.ROUTER_ADDRESS_SONIC;
 const FACTORY_ADDRESS = process.env.FACTORY_ADDRESS_SONIC;
 const LOCK_CONTRACT = process.env.LOCK_CONTRACT_SONIC;
@@ -13,17 +11,18 @@ const provider = new ethers.JsonRpcProvider(RPC_URL);
 const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
 
 /* ================= ABIs ================= */
-
 const ERC20_ABI = [
   "function symbol() view returns (string)",
   "function decimals() view returns (uint8)",
   "function balanceOf(address) view returns (uint256)",
   "function approve(address,uint256) returns (bool)",
-  "function allowance(address,address) view returns (uint256)"
+  "function allowance(address,address) view returns (uint256)",
+  "function totalSupply() view returns (uint256)"
 ];
 
 const ROUTER_ABI = [
-  "function addLiquidity(address,address,uint,uint,uint,uint,address,uint)"
+  "function addLiquidity(address,address,uint,uint,uint,uint,address,uint)",
+  "function swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256) returns (uint256[])"
 ];
 
 const FACTORY_ABI = [
@@ -40,12 +39,10 @@ const LOCK_ABI = [
 ];
 
 /* ================= CONTRACTS ================= */
-
 const router = new ethers.Contract(ROUTER_ADDRESS, ROUTER_ABI, wallet);
 const factory = new ethers.Contract(FACTORY_ADDRESS, FACTORY_ABI, provider);
 
 /* ================= HELPERS ================= */
-
 const deadline = () => Math.floor(Date.now() / 1000) + 1200;
 
 async function parseAmount(token, amount) {
@@ -61,8 +58,24 @@ async function safeApprove(token, spender, amount) {
   }
 }
 
-/* ================= MAIN ================= */
+/* ================= VALIDATION HELPER ================= */
+async function validateERC20Contract(tokenContract, address, tokenName) {
+  try {
+    // Check if it's actually a contract (has bytecode)
+    const code = await wallet.provider.getCode(address);
+    if (code === "0x") {
+      throw new Error(`${tokenName} (${address}) is not a contract - empty bytecode`);
+    }
 
+    // Try to call decimals() - most reliable ERC20 check
+    await tokenContract.decimals();
+    console.log(`✅ ${tokenName} validated: ${address}`);
+  } catch (error) {
+    throw new Error(`${tokenName} (${address}) is not a valid ERC20 contract. Error: ${error.shortMessage || error.message}`);
+  }
+}
+
+/* ================= MAIN ================= */
 export const autoLiquidityAndLock = async (
   tokenA,
   tokenB,
@@ -77,43 +90,39 @@ export const autoLiquidityAndLock = async (
   const tokenAContract = new ethers.Contract(A, ERC20_ABI, wallet);
   const tokenBContract = new ethers.Contract(B, ERC20_ABI, wallet);
 
-  /* ---- PRE CHECKS (NO GAS WASTE) ---- */
+  /* ---- VALIDATE CONTRACTS FIRST ---- */
+  await validateERC20Contract(tokenAContract, A, "TokenA");
+  await validateERC20Contract(tokenBContract, B, "TokenB");
 
-  const ethBal = await provider.getBalance(wallet.address);
-  if (ethBal < ethers.parseEther("0.01")) {
-    throw new Error("Backend wallet ETH too low for liquidity");
-  }
+  /* ---- PARSE AMOUNTS ---- */
+  const amtA = await parseAmount(tokenAContract, 1);
+  const amtB = await parseAmount(tokenBContract, 1);
 
-  const amtA = await parseAmount(tokenAContract, amountA);
-  const amtB = await parseAmount(tokenBContract, amountB);
-
+  /* ---- BALANCE CHECKS ---- */
   const balA = await tokenAContract.balanceOf(wallet.address);
   const balB = await tokenBContract.balanceOf(wallet.address);
 
-  if (balA < amtA) throw new Error("Insufficient TokenA balance");
-  if (balB < amtB) throw new Error("Insufficient TokenB balance");
+  if (balA < amtA) throw new Error(`Insufficient TokenA balance: need ${ethers.formatEther(amtA)} got ${ethers.formatEther(balA)}`);
+  if (balB < amtB) throw new Error(`Insufficient TokenB balance: need ${ethers.formatEther(amtB)} got ${ethers.formatEther(balB)}`);
 
   /* ---- APPROVE SAFE ---- */
-
   await safeApprove(tokenAContract, ROUTER_ADDRESS, amtA);
   await safeApprove(tokenBContract, ROUTER_ADDRESS, amtB);
 
   /* ---- ADD LIQUIDITY ---- */
-
   const tx = await router.addLiquidity(
     A,
     B,
     amtA,
     amtB,
-    0,
-    0,
+    0,  // minAmountA
+    0,  // minAmountB
     wallet.address,
     deadline()
   );
   const receipt = await tx.wait();
 
   /* ---- GET PAIR ---- */
-
   let pair = ethers.ZeroAddress;
   for (let i = 0; i < 10; i++) {
     pair = await factory.getPair(A, B);
@@ -122,17 +131,16 @@ export const autoLiquidityAndLock = async (
   }
 
   if (pair === ethers.ZeroAddress) {
-    throw new Error("Pair not created");
+    throw new Error("Pair not created after 20s");
   }
 
   /* ---- LOCK LP ---- */
-
   const lp = new ethers.Contract(pair, LP_ABI, wallet);
   const lpBal = await lp.balanceOf(wallet.address);
 
-  if (lpBal <= 0n) throw new Error("LP balance zero");
+  if (lpBal <= 0n) throw new Error("No LP tokens received");
 
-  await (await lp.approve(LOCK_CONTRACT, lpBal)).wait();
+  await safeApprove(lp, LOCK_CONTRACT, lpBal);
 
   const locker = new ethers.Contract(LOCK_CONTRACT, LOCK_ABI, wallet);
   const name = await tokenAContract.symbol();
@@ -153,45 +161,52 @@ export const autoLiquidityAndLock = async (
     lockTx: lockRcpt.transactionHash
   };
 };
-export const swapToken = async (tokenInAddress, tokenOutAddress, amountIn, recipient) => {
+
+/* ================= SWAP FUNCTION ================= */
+export const swapToken = async (tokenInAddress, tokenOutAddress, amountIn, recipient, res) => {
   try {
     console.log("SWAP TOKEN:", tokenInAddress, tokenOutAddress, amountIn, recipient);
+    
     const IN = ethers.getAddress(tokenInAddress);
     const OUT = ethers.getAddress(tokenOutAddress);  
+
+    const tokenInContract = new ethers.Contract(IN, ERC20_ABI, wallet);
+    await validateERC20Contract(tokenInContract, IN, "TokenIn");
+
     const pair = await factory.getPair(IN, OUT);
     if (pair === ethers.ZeroAddress) {
       return res.status(400).json({ error: "Liquidity pair not found" });
     }
 
-    const tokenInContract = new ethers.Contract(IN, ERC20_ABI, wallet);
     const amtIn = await parseAmount(tokenInContract, amountIn);
-
     const balance = await tokenInContract.balanceOf(wallet.address);
+    
     if (balance < amtIn) {
       return res.status(400).json({
-        error: "Insufficient token balance in wallet"
+        error: `Insufficient balance: need ${ethers.formatEther(amtIn)} got ${ethers.formatEther(balance)}`
       });
     }
 
-    await approveIfNeeded(tokenInContract, ROUTER_ADDRESS, amtIn);
+    await safeApprove(tokenInContract, ROUTER_ADDRESS, amtIn);
 
-    const tx = await router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
+    const swapTx = await router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
       amtIn,
-      0,
+      0, // minAmountOut
       [IN, OUT],
-      wallet.address,
-      Math.floor(Date.now() / 1000) + 1200
+      recipient || wallet.address,
+      deadline()
     );
 
-    const receipt = await tx.wait();
+    const receipt = await swapTx.wait();
 
     res.json({ success: true, txHash: receipt.transactionHash });
-
   } catch (err) {
+    console.error("Swap error:", err);
     res.status(500).json({ error: err.message });
   }
 };
+
 export default {
   autoLiquidityAndLock,
   swapToken
-};        
+};

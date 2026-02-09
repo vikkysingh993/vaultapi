@@ -11,36 +11,84 @@ const dexServiceSonic = require("../services/dexServiceSonic");
 const dexServiceBase = require("../services/dexServiceBase");
 
 // Helper function to get dex service based on chain
-const getDexService = (chain) => {
-  const chainMap = {
-    'ethereum': dexServiceEth,
-    'polygon': dexServicePol,
-    'sonic': dexServiceSonic,
-    'base': dexServiceBase,
-  };
+// const getDexService = (chain) => {
+//   const chainMap = {
+//     'ethereum': dexServiceEth,
+//     'polygon': dexServicePol,
+//     'sonic': dexServiceSonic,
+//     'base': dexServiceBase,
+//   };
   
-  const service = chainMap[chain?.toLowerCase()];
-  if (!service) {
-    throw new Error(`Unsupported chain: ${chain}`);
+//   const service = chainMap[chain?.toLowerCase()];
+//   if (!service) {
+//     throw new Error(`Unsupported chain: ${chain}`);
+//   }
+//   return service;
+// };
+
+function getDexService(chain) {
+  const normalized = String(chain).toLowerCase().trim();
+  console.log("DEX CHAIN RAW:", chain);
+  console.log("DEX CHAIN NORMALIZED:", normalized);
+
+  switch (normalized) {
+    case "ethereum":
+    case "eth":
+    case "sepolia":
+      return dexServiceEth;
+
+    case "polygon":
+    case "matic":
+      return dexServicePol;
+
+    case "sonic":
+      return dexServiceSonic;
+
+    case "base":
+      return dexServiceBase;
+
+    default:
+      throw new Error(`Unsupported chain at runtime: "${normalized}"`);
   }
-  return service;
-};
+}
+
+
 
 // Helper function to get USDT token address based on chain
-const getUSDTAddress = (chain) => {
-  const usdtMap = {
-    'ethereum': process.env.USDT_TOKEN_ADDRESS_ETH,
-    'polygon': process.env.USDT_TOKEN_ADDRESS_POL,
-    'sonic': process.env.USDT_TOKEN_ADDRESS_SONIC,
-    'base': process.env.USDT_TOKEN_ADDRESS_BASE,
-  };
-  
-  const address = usdtMap[chain?.toLowerCase()];
-  if (!address) {
-    throw new Error(`USDT address not configured for chain: ${chain}`);
+function getUSDTAddress(chain) {
+  switch (chain) {
+    case "polygon":
+      return process.env.USDT_TOKEN_ADDRESS_POL;
+
+    case "ethereum":
+    case "sepolia":
+      return process.env.USDT_TOKEN_ADDRESS_ETH;
+
+    case "sonic":
+      return process.env.USDT_TOKEN_ADDRESS_SONIC;
+    case "base":
+      return process.env.USDT_TOKEN_ADDRESS_BASE;
+
+
+    default:
+      throw new Error(`USDT not configured for chain: ${chain}`);
   }
-  return address;
-};
+}
+
+// const getUSDTAddress = (chain) => {
+//   const usdtMap = {
+//     'ethereum': process.env.USDT_TOKEN_ADDRESS_ETH || '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+//     'polygon': process.env.USDT_TOKEN_ADDRESS_POL || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+//     'sonic': process.env.USDT_TOKEN_ADDRESS_SONIC || '0xa4AB1A20c710cc956B72fe4C57b65613d1Bb8727',
+//     'base': process.env.USDT_TOKEN_ADDRESS_BASE || '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
+//   };
+  
+//   const address = usdtMap[chain?.toLowerCase()];
+//   if (!address) {
+//     throw new Error(`USDT address not configured for chain: ${chain}`);
+//   }
+//   return address;
+// };
 
 exports.createTokenFlow = async (req, res) => {
   try {
@@ -55,9 +103,9 @@ exports.createTokenFlow = async (req, res) => {
       feePaid,
       feeTxHash,
     } = req.body;
-
+    console.log('req body' , req.body);
     // ✅ STEP 1: DUPLICATE CHECK (CORRECT FUNCTION)
-    const existingToken = await Token.findByAddress(tokenAddress);
+    const existingToken = await Token.findByAddress(tokenAddress, chain);
 
     if (existingToken) {
       return res.status(409).json({
@@ -79,6 +127,7 @@ exports.createTokenFlow = async (req, res) => {
     if (req.file) {
       logoPath = `/uploads/tokens/${req.file.filename}`;
     }
+    console.log("log chain:", chain);
     const token = await Token.create({
       userId: req.user?.id || null,
       name,
@@ -94,10 +143,16 @@ exports.createTokenFlow = async (req, res) => {
     });
 
     // Get the correct dex service based on chain
-    const dexService = getDexService(chain);
-    const usdtAddress = getUSDTAddress(chain);
+    const normalizedChain = String(chain).toLowerCase().trim();
+    console.log("SELECTING DEX SERVICE FOR CHAIN:", normalizedChain);
+    const dexService = getDexService(normalizedChain);
+    const usdtAddress = getUSDTAddress(normalizedChain);
+
+
+    console.log('dexService selected:', dexService === dexServiceEth ? 'ETH' : dexService === dexServicePol ? 'POLYGON' : dexService === dexServiceSonic ? 'SONIC' : 'BASE');
     
     const tokenb = supply*50/100; // 50% of total supply
+    console.log("Set liquidity perameter:", usdtAddress, tokenAddress, supply, tokenb);
     const liquidity = await dexService.autoLiquidityAndLock(
       usdtAddress, // USDT address for this chain
       req.body.tokenAddress,

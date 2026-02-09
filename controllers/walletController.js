@@ -8,7 +8,7 @@ const TokenTransfer = db.TokenTransfer;
 
 // RPC URL aur Token Configuration
 const RPC_URL = process.env.RPC_URL_SONIC || "https://rpc.soniclabs.com";
-const TOKEN_ADDRESS = process.env.USDT_TOKEN_ADDRESS_ETH || "0x153938b34c8d891cf45c2cf26d40f7afcd3981bb";
+const TOKEN_ADDRESS = process.env.VITE_OCC_TOKEN_ADDRESS || "0x307Ad911cF5071be6Aace99Cb2638600212dC657";
 
 // Provider setup with proper network config
 const provider = new ethers.JsonRpcProvider(RPC_URL);
