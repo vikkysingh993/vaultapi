@@ -16,23 +16,22 @@ exports.createPage = async (req, res) => {
 
 // GET SINGLE
 exports.getPageById = async (req, res) => {
-  const page = await StaticPage.findByPk(req.params.id);
+  const page = await StaticPage.findById(req.params.id);
   res.json(page);
 };
 
 // UPDATE
 exports.updatePage = async (req, res) => {
   const { title, slug, content } = req.body;
-  await StaticPage.update(
-    { title, slug, content },
-    { where: { id: req.params.id } }
+  await StaticPage.update(req.params.id,
+    { title, slug, content }
   );
   res.json({ success: true });
 };
 
 // DELETE
 exports.deletePage = async (req, res) => {
-  await StaticPage.destroy({ where: { id: req.params.id } });
+  await StaticPage.delete(req.params.id);
   res.json({ success: true });
 };
 // PUBLIC PAGE BY SLUG
