@@ -23,12 +23,16 @@ const ERC20_ABI = [
 ];
 
 const ROUTER_ABI = [
-  "function addLiquidity(address,address,uint,uint,uint,uint,address,uint)"
+  "function addLiquidity(address tokenA, address tokenB, bool stable, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) returns (uint256 amountA, uint256 amountB, uint256 liquidity)"
 ];
 
+
+
 const FACTORY_ABI = [
-  "function getPair(address,address) view returns (address)"
+  "function getPool(address tokenA, address tokenB, bool stable) view returns (address)"
 ];
+
+
 
 const LP_ABI = [
   "function balanceOf(address) view returns (uint256)",
@@ -55,19 +59,12 @@ async function parseAmount(token, amount) {
 
 async function safeApprove(token, spender, amount) {
   const allowance = await token.allowance(wallet.address, spender);
+  console.log("Current allowance:", allowance.toString());
   if (allowance < amount) {
     await (await token.approve(spender, 0)).wait();
     await (await token.approve(spender, amount)).wait();
   }
 }
-
-function dexError(message, status = 400, code = "DEX_ERROR") {
-  const err = new Error(message);
-  err.statusCode = status;
-  err.code = code;
-  return err;
-}
-
 
 /* ================= MAIN ================= */
 
@@ -77,8 +74,8 @@ export const autoLiquidityAndLock = async (
   amountA,
   amountB
 ) => {
-  try {
-  console.log("AUTO LIQUIDITY START Base", tokenA, tokenB, amountA, amountB);
+  // try {
+  console.log("AUTO LIQUIDITY START ETH", tokenA, tokenB, amountA, amountB);
 
   const A = ethers.getAddress(tokenA);
   const B = ethers.getAddress(tokenB);
@@ -88,56 +85,69 @@ export const autoLiquidityAndLock = async (
 
   /* ---- PRE CHECKS (NO GAS WASTE) ---- */
 
-  // const ethBal = await provider.getBalance(wallet.address);
+  const ethBal = await provider.getBalance(wallet.address);
   // if (ethBal < ethers.parseEther("0.01")) {
   //   throw new Error("Backend wallet ETH too low for liquidity");
   // }
 
-  const amtA = await parseAmount(tokenAContract, 0.001);
-  const amtB = await parseAmount(tokenBContract, 0.001);
+  const amtA = await parseAmount(tokenAContract, 1);
+  const amtB = await parseAmount(tokenBContract, 1);
 
   const balA = await tokenAContract.balanceOf(wallet.address);
   const balB = await tokenBContract.balanceOf(wallet.address);
 
-  if (balA < amtA) throw dexError("Insufficient TokenA balance", 400, "INSUFFICIENT_BALANCE");
-  if (balB < amtB) throw dexError("Insufficient TokenB balance", 400, "INSUFFICIENT_BALANCE");
+  if (balA < amtA) throw new Error("Insufficient TokenA balance");
+  if (balB < amtB) throw new Error("Insufficient TokenB balance");
 
   /* ---- APPROVE SAFE ---- */
 
   await safeApprove(tokenAContract, ROUTER_ADDRESS, amtA);
   await safeApprove(tokenBContract, ROUTER_ADDRESS, amtB);
+  const STABLE_POOL = false; // USDT pairs ke liye stable=true
+    console.log("🏦 Using stable pool:", STABLE_POOL);
+
+    // 🔥 STATIC SIMULATION with stable param
+    console.log("🧪 Simulating addLiquidity(stable=", STABLE_POOL, ")");
+  console.log("🧪 Testing static call...");
+const minA = (amtA * 95n) / 100n; // 5% slippage
+const minB = (amtB * 95n) / 100n;
 
   /* ---- ADD LIQUIDITY ---- */
 
   const tx = await router.addLiquidity(
     A,
     B,
+    STABLE_POOL,  // 🔥 STABLE PARAMETER!
     amtA,
     amtB,
     0,
     0,
     wallet.address,
-    deadline()
+    deadline(),
+    {
+    gasLimit: 3_000_000n // 🔥 manually set to avoid estimation failure
+  }
   );
   const receipt = await tx.wait();
 
   /* ---- GET PAIR ---- */
 
-  let pair = ethers.ZeroAddress;
-  for (let i = 0; i < 10; i++) {
-    pair = await factory.getPair(A, B);
-    if (pair !== ethers.ZeroAddress) break;
-    await new Promise(r => setTimeout(r, 2000));
-  }
+  let pool = ethers.ZeroAddress;
 
-  if (pair === ethers.ZeroAddress) {
-  throw dexError("Liquidity pair not created", 422, "PAIR_NOT_FOUND");
+for (let i = 0; i < 10; i++) {
+  pool = await factory.getPool(A, B, STABLE_POOL);
+  if (pool !== ethers.ZeroAddress) break;
+  await new Promise(r => setTimeout(r, 2000));
+}
+
+if (pool === ethers.ZeroAddress) {
+  throw new Error("Pool not created");
 }
 
 
   /* ---- LOCK LP ---- */
 
-  const lp = new ethers.Contract(pair, LP_ABI, wallet);
+const lp = new ethers.Contract(pool, LP_ABI, wallet);
   const lpBal = await lp.balanceOf(wallet.address);
 
   if (lpBal <= 0n) throw new Error("LP balance zero");
@@ -149,39 +159,42 @@ export const autoLiquidityAndLock = async (
 
   const lockTx = await locker.createLock(
     name,
-    pair,
+    pool,
     wallet.address,
-    lpBal
+    lpBal,
+  {
+    gasLimit: 3_000_000n, // 🔥 IMPORTANT
+  }
   );
   const lockRcpt = await lockTx.wait();
 
   return {
     success: true,
     liquidityTx: receipt.transactionHash,
-    pairAddress: pair,
+    pairAddress: pool,
     lpLocked: lpBal.toString(),
     lockTx: lockRcpt.transactionHash
   };
-} catch (error) {
-    console.error("💥 DEX SERVICE FAILED:", error);
+//  } catch (error) {
+//     console.error("💥 DEX SERVICE FAILED:", error);
     
-    // Enhanced error with full details
-    let errorMessage = error.message || 'Unknown error';
-    if (error.code) {
-      errorMessage = `${error.code}: ${errorMessage}`;
-    }
-    if (error.reason) {
-      errorMessage += ` | Reason: ${error.reason}`;
-    }
-    if (error.data) {
-      errorMessage += ` | Data: ${error.data}`;
-    }
+//     // Enhanced error with full details
+//     let errorMessage = error.message || 'Unknown error';
+//     if (error.code) {
+//       errorMessage = `${error.code}: ${errorMessage}`;
+//     }
+//     if (error.reason) {
+//       errorMessage += ` | Reason: ${error.reason}`;
+//     }
+//     if (error.data) {
+//       errorMessage += ` | Data: ${error.data}`;
+//     }
 
-    const detailedError = new Error(errorMessage);
-    detailedError.originalError = error;
-    detailedError.code = error.code;
-    throw detailedError;
-  }
+//     const detailedError = new Error(errorMessage);
+//     detailedError.originalError = error;
+//     detailedError.code = error.code;
+//     throw detailedError;
+//   }
 };
 export const swapToken = async (tokenInAddress, tokenOutAddress, amountIn, recipient) => {
   try {

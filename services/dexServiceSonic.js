@@ -4,7 +4,7 @@ import { ethers } from "ethers";
 const RPC_URL = process.env.RPC_URL_SONIC;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const ROUTER_ADDRESS = process.env.ROUTER_ADDRESS_SONIC;
-const FACTORY_ADDRESS = process.env.FACTORY_ADDRESS_SONIC;
+const FACTORY_ADDRESS = process.env.FACTORY_ADDRESS_SONIC || "0x2dA25E7446A70D7be65fd4c053948BEcAA6374c8";
 const LOCK_CONTRACT = process.env.LOCK_CONTRACT_SONIC;
 
 const provider = new ethers.JsonRpcProvider(RPC_URL);
