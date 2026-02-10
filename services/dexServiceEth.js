@@ -69,6 +69,7 @@ export const autoLiquidityAndLock = async (
   amountA,
   amountB
 ) => {
+  try {
   console.log("AUTO LIQUIDITY START ETH", tokenA, tokenB, amountA, amountB);
 
   const A = ethers.getAddress(tokenA);
@@ -80,12 +81,12 @@ export const autoLiquidityAndLock = async (
   /* ---- PRE CHECKS (NO GAS WASTE) ---- */
 
   const ethBal = await provider.getBalance(wallet.address);
-  if (ethBal < ethers.parseEther("0.01")) {
-    throw new Error("Backend wallet ETH too low for liquidity");
-  }
+  // if (ethBal < ethers.parseEther("0.01")) {
+  //   throw new Error("Backend wallet ETH too low for liquidity");
+  // }
 
-  const amtA = await parseAmount(tokenAContract, 0.001);
-  const amtB = await parseAmount(tokenBContract, 0.001);
+  const amtA = await parseAmount(tokenAContract, 1);
+  const amtB = await parseAmount(tokenBContract, 1);
 
   const balA = await tokenAContract.balanceOf(wallet.address);
   const balB = await tokenBContract.balanceOf(wallet.address);
@@ -155,6 +156,26 @@ export const autoLiquidityAndLock = async (
     lpLocked: lpBal.toString(),
     lockTx: lockRcpt.transactionHash
   };
+ } catch (error) {
+    console.error("💥 DEX SERVICE FAILED:", error);
+    
+    // Enhanced error with full details
+    let errorMessage = error.message || 'Unknown error';
+    if (error.code) {
+      errorMessage = `${error.code}: ${errorMessage}`;
+    }
+    if (error.reason) {
+      errorMessage += ` | Reason: ${error.reason}`;
+    }
+    if (error.data) {
+      errorMessage += ` | Data: ${error.data}`;
+    }
+
+    const detailedError = new Error(errorMessage);
+    detailedError.originalError = error;
+    detailedError.code = error.code;
+    throw detailedError;
+  }
 };
 export const swapToken = async (tokenInAddress, tokenOutAddress, amountIn, recipient) => {
   try {

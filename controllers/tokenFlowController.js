@@ -65,7 +65,7 @@ function getUSDTAddress(chain) {
       return process.env.USDT_TOKEN_ADDRESS_ETH;
 
     case "sonic":
-      return process.env.USDT_TOKEN_ADDRESS_SONIC;
+      return process.env.VITE_OCC_TOKEN_ADDRESS;
     case "base":
       return process.env.USDT_TOKEN_ADDRESS_BASE;
 
@@ -168,10 +168,18 @@ exports.createTokenFlow = async (req, res) => {
     res.json({ success: true, token });
 
   } catch (e) {
-    console.error(e);
-    res.status(500).json({
+    console.error('CREATE TOKEN FLOW ERROR:', e);
+    
+    // Send detailed DEX error to frontend popup
+    return res.status(400).json({  // Changed from 500 to 400 for client errors
       success: false,
-      error: e.message
+      error: e.message,  // Now contains actual blockchain error
+      code: e.code,      // Ethers.js error code
+      details: e.originalError ? {
+        code: e.originalError.code,
+        data: e.originalError.data,
+        reason: e.originalError.reason
+      } : null
     });
   }
 };
