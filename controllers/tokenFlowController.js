@@ -160,6 +160,12 @@ exports.createTokenFlow = async (req, res) => {
       // supply,
       // tokenb.toString()
     );
+    if (!liquidity.success) {
+      return res.status(400).json({
+        errorType: liquidity.errorType,
+        userMessage: liquidity.userMessage
+      });
+    }
     await Token.update(token.id, {
       liquidityResponse: liquidity,
       status: "COMPLETED",

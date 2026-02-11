@@ -246,38 +246,47 @@ const updateWalletAddresses = async (req, res) => {
     const userId = req.user.id;
     let { walletAddress, walletAddresses } = req.body;
 
-    // 🔥 HANDLE BOTH CASES
-    if (!walletAddress && Array.isArray(walletAddresses)) {
-      walletAddress = walletAddresses[0];
+    let finalAddresses = [];
+
+    // 🔥 Case 1: walletAddresses array aaya
+    if (Array.isArray(walletAddresses)) {
+      finalAddresses = walletAddresses;
     }
 
-    if (typeof walletAddress !== "string") {
+    // 🔥 Case 2: single walletAddress string aaya
+    else if (typeof walletAddress === "string") {
+      finalAddresses = [walletAddress];
+    }
+
+    else {
       return res.status(400).json({
         success: false,
-        message: "walletAddress must be a string",
+        message: "walletAddress or walletAddresses required",
       });
     }
 
-    const normalized = walletAddress.trim().toLowerCase();
+    // Normalize all addresses
+    finalAddresses = finalAddresses
+      .map(addr => addr.trim().toLowerCase())
+      .filter(Boolean);
 
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({
+    if (finalAddresses.length === 0) {
+      return res.status(400).json({
         success: false,
-        message: "User not found",
+        message: "No valid addresses provided",
       });
     }
 
+    // Save as JSON string
     await User.update(userId, {
-      walletAddress: normalized,
+      walletAddress: JSON.stringify(finalAddresses),
     });
 
     return res.json({
       success: true,
-      message: "Wallet address updated successfully",
+      message: "Wallet addresses updated successfully",
       data: {
-        walletAddress: normalized,
+        walletAddresses: finalAddresses,
       },
     });
 
@@ -289,6 +298,7 @@ const updateWalletAddresses = async (req, res) => {
     });
   }
 };
+
 
 
 

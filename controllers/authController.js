@@ -305,7 +305,8 @@ const authLogin = async (req, res) => {
 
     // 2️⃣ Find user
     let user = await User.findByName(normalizedUsername);
-
+    console.log('🔍 Searching for user with username:', normalizedUsername);
+      console.log('👤 User found:', !!user, user ? { id: user.id, name: user.name } : 'null') ;
 
     // 3️⃣ Auto Signup
     if (!user) {
@@ -313,7 +314,7 @@ const authLogin = async (req, res) => {
         name: normalizedUsername,
         password: password, // ❌ hash yaha mat karo
         role: 0,
-        walletAddress: JSON.stringify([]),
+        // walletAddress: JSON.stringify([]),
       });
 
       console.log('🆕 User auto-registered:', normalizedUsername);
