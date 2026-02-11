@@ -327,8 +327,8 @@ const getTransferHistory = async (req, res) => {
         p.months,
         p.price,
         p.status AS "planStatus"
-      FROM "TokenTransfers" tt
-      LEFT JOIN "Plans" p ON p.id = tt."stakeId"
+      FROM "token_transfers" tt
+      LEFT JOIN "plans" p ON p.id = tt."stakeId"
       WHERE tt."userId" = $1
         AND tt.type = 'TRANSFER'
       ORDER BY tt."createdAt" DESC
@@ -338,7 +338,7 @@ const getTransferHistory = async (req, res) => {
     // 🔹 COUNT QUERY
     const countQuery = `
       SELECT COUNT(*)::int AS total
-      FROM "TokenTransfers"
+      FROM "token_transfers"
       WHERE "userId" = $1
         AND type = 'TRANSFER'
     `;
