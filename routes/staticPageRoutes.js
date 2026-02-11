@@ -16,5 +16,7 @@ router.post("/", protect, admin, createPage);
 router.get("/:id", protect, admin, getPageById);
 router.put("/:id", protect, admin, updatePage);
 router.delete("/:id", protect, admin, deletePage);
+router.get("/:slug", getPageBySlug);
+
 
 module.exports = router;

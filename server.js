@@ -61,6 +61,7 @@ app.use("/api/token-flow", tokenFlowRoutes);
 app.use("/api/admin", userRoutes);
 
 app.use("/api/admin/pages", staticPageRoutes);
+
 app.use("/api", publicRoutes);
 app.use("/api/admin", dashboardRoutes);
 app.use("/api/admin", adminSettingRoutes);

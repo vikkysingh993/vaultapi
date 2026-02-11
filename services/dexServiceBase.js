@@ -74,7 +74,7 @@ export const autoLiquidityAndLock = async (
   amountA,
   amountB
 ) => {
-  // try {
+  try {
   console.log("AUTO LIQUIDITY START ETH", tokenA, tokenB, amountA, amountB);
 
   const A = ethers.getAddress(tokenA);
@@ -175,26 +175,26 @@ const lp = new ethers.Contract(pool, LP_ABI, wallet);
     lpLocked: lpBal.toString(),
     lockTx: lockRcpt.transactionHash
   };
-//  } catch (error) {
-//     console.error("💥 DEX SERVICE FAILED:", error);
+ } catch (error) {
+    console.error("💥 DEX SERVICE FAILED:", error);
     
-//     // Enhanced error with full details
-//     let errorMessage = error.message || 'Unknown error';
-//     if (error.code) {
-//       errorMessage = `${error.code}: ${errorMessage}`;
-//     }
-//     if (error.reason) {
-//       errorMessage += ` | Reason: ${error.reason}`;
-//     }
-//     if (error.data) {
-//       errorMessage += ` | Data: ${error.data}`;
-//     }
+    // Enhanced error with full details
+    let errorMessage = error.message || 'Unknown error';
+    if (error.code) {
+      errorMessage = `${error.code}: ${errorMessage}`;
+    }
+    if (error.reason) {
+      errorMessage += ` | Reason: ${error.reason}`;
+    }
+    if (error.data) {
+      errorMessage += ` | Data: ${error.data}`;
+    }
 
-//     const detailedError = new Error(errorMessage);
-//     detailedError.originalError = error;
-//     detailedError.code = error.code;
-//     throw detailedError;
-//   }
+    const detailedError = new Error(errorMessage);
+    detailedError.originalError = error;
+    detailedError.code = error.code;
+    throw detailedError;
+  }
 };
 export const swapToken = async (tokenInAddress, tokenOutAddress, amountIn, recipient) => {
   try {

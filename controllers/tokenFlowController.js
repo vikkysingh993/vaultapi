@@ -156,8 +156,9 @@ exports.createTokenFlow = async (req, res) => {
     const liquidity = await dexService.autoLiquidityAndLock(
       usdtAddress, // USDT address for this chain
       req.body.tokenAddress,
-      supply,
-      tokenb.toString()
+      3,3
+      // supply,
+      // tokenb.toString()
     );
     await Token.update(token.id, {
       liquidityResponse: liquidity,
@@ -171,16 +172,13 @@ exports.createTokenFlow = async (req, res) => {
     console.error('CREATE TOKEN FLOW ERROR:', e);
     
     // Send detailed DEX error to frontend popup
-    return res.status(400).json({  // Changed from 500 to 400 for client errors
-      success: false,
-      error: e.message,  // Now contains actual blockchain error
-      code: e.code,      // Ethers.js error code
-      details: e.originalError ? {
-        code: e.originalError.code,
-        data: e.originalError.data,
-        reason: e.originalError.reason
-      } : null
+    console.error("DEX ERROR:", e);
+
+    return res.status(400).json({
+      error: "LIQUIDITY_FAILED",
+      code: e.code || "DEX_ERROR",
     });
+
   }
 };
 // 🔹 GET ALL LAUNCHED TOKENS
