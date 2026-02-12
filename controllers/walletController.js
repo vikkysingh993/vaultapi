@@ -214,12 +214,11 @@ const transferTokens = async (req, res) => {
 
     await tx.wait();
 
-    await TokenTransfer.update(
+    await TokenTransfer.update(transaction.id,
       {
         status: "SUCCESS",
         txHash: tx.hash
       },
-      { where: { id: transaction.id } }
     );
 
     return res.json({
