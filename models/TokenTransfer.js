@@ -20,7 +20,8 @@ const createTokenTransferTable = async () => {
         type VARCHAR(20) DEFAULT 'TRANSFER',
         "claimable_amount" VARCHAR(255),
         "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        "tokenaddress" VARCHAR(100)
       );
     `);
   } catch (error) {

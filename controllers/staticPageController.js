@@ -40,7 +40,7 @@ exports.getPageBySlug = async (req, res) => {
     const { slug } = req.params;
 
     const page = await StaticPage.findBySlug(slug);
-    console.log("PAGE BY SLUG:", page);
+    // console.log("PAGE BY SLUG:", page);
     if (!page) {
       return res.status(404).json({
         success: false,

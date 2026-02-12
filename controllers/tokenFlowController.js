@@ -233,6 +233,7 @@ exports.getLaunchpadTokens = async (req, res) => {
 
     let where = {};
     let include = [];
+    let limit = 20;
 
     // 🔹 NEW COINS (last 24h)
     if (type === "new") {
@@ -244,6 +245,10 @@ exports.getLaunchpadTokens = async (req, res) => {
       where.createdAt = { [Op.lt]: before24h };
     }
 
+    if(type === "6") {
+      limit = 6;
+    }
+    console.log("Fetch tokens with type:", type, "where:", where, "limit:", limit);
     // 🔹 LAST TRADE (joined with swaps)
     if (type === "trade") {
       include.push({
@@ -267,7 +272,7 @@ exports.getLaunchpadTokens = async (req, res) => {
         "liquidityResponse",
       ],
       order: [["createdAt", "DESC"]],
-      limit: 20,
+      limit: limit,
       distinct: true,
     });
 

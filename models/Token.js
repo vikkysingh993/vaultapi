@@ -78,7 +78,7 @@ const Token = {
 
   findAll: async () => {
     try {
-      const result = await pool.query('SELECT * FROM tokens ORDER BY "createdAt" DESC');
+      const result = await pool.query('SELECT * FROM tokens ORDER BY "createdAt" DESC Limit 6');
       return result.rows;
     } catch (error) {
       throw error;

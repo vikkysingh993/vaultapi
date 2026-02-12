@@ -191,7 +191,7 @@ const transferTokens = async (req, res) => {
       fromAddress: userWallet.address,
       toAddress: to,
       amount: amount.toString(),
-      tokenAddress: TOKEN_ADDRESS,
+      tokenaddress: TOKEN_ADDRESS,
       status: "PENDING",
       startDate,
       endDate,
