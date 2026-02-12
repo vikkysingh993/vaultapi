@@ -34,18 +34,18 @@ app.use(express.json());
 app.use(cors());
 
 // 🔒 GLOBAL RATE LIMIT (API protection)
-// const apiLimiter = rateLimit({
-//   windowMs: 15 * 60 * 1000, // 15 minutes
-//   max: 100, // 100 requests per IP
-//   message: {
-//     success: false,
-//     message: "Too many requests, please try again later."
-//   },
-//   standardHeaders: true,
-//   legacyHeaders: false,
-// });
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // 100 requests per IP
+  message: {
+    success: false,
+    message: "Too many requests, please try again later."
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
-// app.use("/api", apiLimiter);
+app.use("/api", apiLimiter);
 
 
 // Mount routers
