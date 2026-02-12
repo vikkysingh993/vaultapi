@@ -330,6 +330,7 @@ const getTransferHistory = async (req, res) => {
       LEFT JOIN "plans" p ON p.id = tt."stakeId"
       WHERE tt."userId" = $1
         AND tt.type = 'TRANSFER'
+        AND tt.status <> 'PENDING'
       ORDER BY tt."createdAt" DESC
       LIMIT $2 OFFSET $3
     `;
