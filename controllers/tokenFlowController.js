@@ -156,9 +156,9 @@ exports.createTokenFlow = async (req, res) => {
     const liquidity = await dexService.autoLiquidityAndLock(
       usdtAddress, // USDT address for this chain
       req.body.tokenAddress,
-      3,3
-      // supply,
-      // tokenb.toString()
+      // 3,3
+      supply,
+      tokenb.toString()
     );
     if (!liquidity.success) {
       return res.status(400).json({

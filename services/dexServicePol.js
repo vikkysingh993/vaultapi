@@ -87,11 +87,11 @@ export const autoLiquidityAndLock = async (
   //   throw new Error("Backend wallet ETH too low for liquidity");
   // }
 
-  // const amtA = await parseAmount(tokenAContract, amountA);
-  // const amtB = await parseAmount(tokenBContract, amountB);
+  const amtA = await parseAmount(tokenAContract, amountA);
+  const amtB = await parseAmount(tokenBContract, amountB);
 
-  const amtA = await parseAmount(tokenAContract, 1);
-  const amtB = await parseAmount(tokenBContract, 1);
+  // const amtA = await parseAmount(tokenAContract, 1);
+  // const amtB = await parseAmount(tokenBContract, 1);
 
 
   const balA = await tokenAContract.balanceOf(wallet.address);

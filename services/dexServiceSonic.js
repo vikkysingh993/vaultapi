@@ -120,8 +120,8 @@ const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
 const amountA = 1; // for testing, use 1 unit of each token. In production, these should come from the request body or be calculated based on supply and desired ratio.  
 const amountB =1;
 
-    const amountADesired = ethers.parseUnits(amountA.toString(), decimalsA);
-    const amountBDesired = ethers.parseUnits(amountB.toString(), decimalsB);
+    const amountADesired = ethers.parseUnits(amtA.toString(), decimalsA);
+    const amountBDesired = ethers.parseUnits(amtB.toString(), decimalsB);
   const amountAMin =
     amountADesired * BigInt(100 - SLIPPAGE) / 100n;
   const amountBMin =
