@@ -190,6 +190,7 @@ exports.createTokenFlow = async (req, res) => {
 // 🔹 GET ALL LAUNCHED TOKENS
 exports.getAllTokens = async (req, res) => {
   try {
+    console.log('Fetching all tokens for launchpad');
     const tokens = await Token.findAll({
       attributes: [
         "id",
@@ -225,15 +226,28 @@ exports.getAllTokens = async (req, res) => {
 
 
 exports.getLaunchpadTokens = async (req, res) => {
+  console.log('Fetching launchpad tokens with query:', req.query);
   try {
-    const { type = "all" } = req.query;
-
+    const { type = "all", search = "" } = req.query;
+    console.log(`search query received: "${search}" of type ${typeof search}`);
     const now = new Date();
     const before24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
     let where = {};
     let include = [];
     let limit = 20;
+
+    // 🔹 SEARCH FILTER
+    const trimmedSearch = String(search || "").trim();
+    if (trimmedSearch) {
+      const searchTerm = `%${trimmedSearch}%`;
+      where[Op.or] = [
+        { name: { [Op.iLike]: searchTerm } },
+        { symbol: { [Op.iLike]: searchTerm } },
+        { description: { [Op.iLike]: searchTerm } },
+      ];
+    }
+    console.log("Fetch tokens with type:", type, "search:", trimmedSearch, "where:", where);
 
     // 🔹 NEW COINS (last 24h)
     if (type === "new") {
@@ -248,7 +262,7 @@ exports.getLaunchpadTokens = async (req, res) => {
     if(type === "6") {
       limit = 6;
     }
-    console.log("Fetch tokens with type:", type, "where:", where, "limit:", limit);
+    console.log("Fetch tokens with type:", type, "search:", search, "where:", where, "limit:", limit);
     // 🔹 LAST TRADE (joined with swaps)
     if (type === "trade") {
       include.push({
@@ -274,6 +288,7 @@ exports.getLaunchpadTokens = async (req, res) => {
       order: [["createdAt", "DESC"]],
       limit: limit,
       distinct: true,
+      logging: console.log,
     });
 
     res.json({

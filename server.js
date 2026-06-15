@@ -26,6 +26,9 @@ connectDB();
 
 const app = express();
 
+// Disable ETag caching on API responses so search updates are always fresh
+app.disable('etag');
+
 // Body parser
 app.use(express.json());
 
