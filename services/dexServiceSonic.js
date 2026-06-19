@@ -229,11 +229,12 @@ const amountB =1;
 
   // 5️⃣ Approve LP to Lock Contract
   const lpAllowance = await lp.allowance(wallet.address, LOCK_CONTRACT);
-
+console.log('lpAllowance:', lpAllowance.toString(), 'lpBalance:', lpBalance.toString());
   if (lpAllowance < lpBalance) {
     console.log("🔐 Approving LP for Lock...");
     await (await lp.approve(LOCK_CONTRACT, lpBalance)).wait();
   }
+  console.log("✅ LP Approved for Lock Contract", LOCK_CONTRACT);
 
   // 6️⃣ Lock LP
   const locker = new ethers.Contract(
