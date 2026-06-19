@@ -244,7 +244,7 @@ const amountB =1;
 
   const symbol = await tokenA.symbol();
 
-  console.log("🔒 Locking LP...");
+  console.log("🔒 Locking LP Data...", symbol, pair, wallet.address, lpBalance);
 
   const lockTx = await locker.createLock(
     symbol,
