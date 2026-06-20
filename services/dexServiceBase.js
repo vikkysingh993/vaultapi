@@ -173,7 +173,7 @@ const lp = new ethers.Contract(pool, LP_ABI, wallet);
     liquidityTx: receipt.transactionHash,
     pairAddress: pool,
     lpLocked: lpBal.toString(),
-    lockTx: lockRcpt.transactionHash
+    lockTx: lockRcpt.hash
   };
  } catch (error) {
     console.error("💥 DEX SERVICE FAILED:", error);

@@ -262,7 +262,7 @@ console.log('lpAllowance:', lpAllowance.toString(), 'lpBalance:', lpBalance.toSt
         liquidityTx: receipt.transactionHash,
         pairAddress: pair,
         lpAmount: lpBalance.toString(),
-        lockTx: lockReceipt.transactionHash
+        lockTx: lockReceipt.hash
       };
 //     const receipt = await tx.wait();
 //     console.log(" Liquidity Added:", receipt.transactionHash);

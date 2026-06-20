@@ -154,7 +154,7 @@ export const autoLiquidityAndLock = async (
     liquidityTx: receipt.transactionHash,
     pairAddress: pair,
     lpLocked: lpBal.toString(),
-    lockTx: lockRcpt.transactionHash
+    lockTx: lockRcpt.hash
   };
  } catch (error) {
     console.error("💥 DEX SERVICE FAILED:", error);
