@@ -256,7 +256,7 @@ console.log('lpAllowance:', lpAllowance.toString(), 'lpBalance:', lpBalance.toSt
 
   const lockReceipt = await lockTx.wait();
 
-  console.log("✅ LP Locked:", lockReceipt.transactionHash);
+  console.log("✅ LP Locked:", lockReceipt);
   return {
         success: true,
         liquidityTx: receipt.transactionHash,
