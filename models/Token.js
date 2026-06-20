@@ -17,7 +17,7 @@ const createTokenTable = async () => {
         "feeTxHash" VARCHAR(120),
         "liquidityTx" VARCHAR(120),
         "pairAddress" VARCHAR(100),
-        "lpLocked" DECIMAL(36, 18),
+        "lpLocked" TINYINT DEFAULT 0,
         "swapTx" VARCHAR(120),
         status VARCHAR(20) DEFAULT 'PENDING',
         "liquidityResponse" JSONB,

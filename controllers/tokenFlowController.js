@@ -166,9 +166,13 @@ exports.createTokenFlow = async (req, res) => {
         userMessage: liquidity.userMessage
       });
     }
+    console.log("DEX LIQUIDITY RESULT:", liquidity);
+    console.log("DEX LIQUIDITY RESULT:", liquidity.liquidityTx, liquidity.pairAddress, liquidity.lpLocked, liquidity.lockTx);
     await Token.update(token.id, {
       liquidityResponse: liquidity,
       status: "COMPLETED",
+      lpLocked: liquidity.lockTx != null ? 1 : 0,
+      // lpLockedRaw: liquidity.lockTx, // Store raw lockTx for reference
     });
 
 

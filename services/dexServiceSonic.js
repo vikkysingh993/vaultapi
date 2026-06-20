@@ -195,7 +195,7 @@ const amountB =1;
   console.log("📨 addLiquidity tx:", tx.hash);
 
   const receipt = await tx.wait();
-  console.log("🎉 Liquidity added");
+  console.log("🎉 Liquidity added", receipt);
 
   
     const factory = new ethers.Contract(
