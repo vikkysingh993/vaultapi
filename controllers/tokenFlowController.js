@@ -97,11 +97,17 @@ exports.createTokenFlow = async (req, res) => {
       symbol,
       supply,
       description,
+      tagline,
+      projectCategory,
       chain,
       tokenAddress,
       creatorWallet,
       feePaid,
       feeTxHash,
+      website,
+      twitter,
+      telegram,
+      discord
     } = req.body;
     console.log('req body' , req.body);
     // ✅ STEP 1: DUPLICATE CHECK (CORRECT FUNCTION)
@@ -134,12 +140,18 @@ exports.createTokenFlow = async (req, res) => {
       symbol,
       supply,
       description,
+      tagline,
+      projectCategory,
       chain,
       tokenAddress,
       creatorWallet,
       feePaid,
       feeTxHash,
       logo: logoPath, // 👈 DB me save
+      website,
+      twitter,
+      telegram,
+      discord
     });
 
     // Get the correct dex service based on chain
