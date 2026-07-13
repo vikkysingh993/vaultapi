@@ -5,7 +5,7 @@ const rateLimit = require("express-rate-limit");
 
 
 // Load env vars FIRST before requiring models
-dotenv.config();
+dotenv.config({ path: './vaultapi.env' });
 
 const { connectDB } = require('./models');
 const authRoutes = require('./routes/authRoutes');

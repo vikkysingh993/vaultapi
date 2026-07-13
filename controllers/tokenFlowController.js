@@ -1,347 +1,243 @@
-
 const db = require('../models');
-const { Op, fn, col, literal } = require("sequelize");
 const Token = db.Token;
-const TokenSwap = db.TokenSwap;
+const { ethers } = require("ethers");
 
-// Import chain-specific dex services
 const dexServiceEth = require("../services/dexServiceEth");
 const dexServicePol = require("../services/dexServicePol");
 const dexServiceSonic = require("../services/dexServiceSonic");
 const dexServiceBase = require("../services/dexServiceBase");
 
-// Helper function to get dex service based on chain
-// const getDexService = (chain) => {
-//   const chainMap = {
-//     'ethereum': dexServiceEth,
-//     'polygon': dexServicePol,
-//     'sonic': dexServiceSonic,
-//     'base': dexServiceBase,
-//   };
-  
-//   const service = chainMap[chain?.toLowerCase()];
-//   if (!service) {
-//     throw new Error(`Unsupported chain: ${chain}`);
-//   }
-//   return service;
-// };
+const ERC20_TRANSFER_ABI = [
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "function decimals() view returns (uint8)"
+];
+
+const RPC_MAP = {
+  ethereum: process.env.RPC_URL_ETH,
+  eth:      process.env.RPC_URL_ETH,
+  sepolia:  process.env.RPC_URL_ETH,
+  polygon:  process.env.RPC_URL_POL,
+  matic:    process.env.RPC_URL_POL,
+  sonic:    process.env.RPC_URL_SONIC,
+  base:     process.env.RPC_URL_BASE,
+};
+
+async function transferTokenOnChain(chain, tokenAddress, toAddress, amount) {
+  const rpc = RPC_MAP[chain];
+  if (!rpc) throw new Error(`No RPC configured for chain: ${chain}`);
+  const provider = new ethers.JsonRpcProvider(rpc);
+  const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+  const token = new ethers.Contract(tokenAddress, ERC20_TRANSFER_ABI, wallet);
+  const decimals = await token.decimals();
+  const tx = await token.transfer(toAddress, ethers.parseUnits(amount.toString(), decimals));
+  const receipt = await tx.wait();
+  return receipt.hash;
+}
 
 function getDexService(chain) {
-  const normalized = String(chain).toLowerCase().trim();
-  console.log("DEX CHAIN RAW:", chain);
-  console.log("DEX CHAIN NORMALIZED:", normalized);
-
-  switch (normalized) {
+  switch (chain) {
     case "ethereum":
     case "eth":
     case "sepolia":
       return dexServiceEth;
-
     case "polygon":
     case "matic":
       return dexServicePol;
-
     case "sonic":
       return dexServiceSonic;
-
     case "base":
       return dexServiceBase;
-
     default:
-      throw new Error(`Unsupported chain at runtime: "${normalized}"`);
+      throw new Error(`Unsupported chain: "${chain}"`);
   }
 }
 
-
-
-// Helper function to get USDT token address based on chain
 function getUSDTAddress(chain) {
   switch (chain) {
-    case "polygon":
-      return process.env.USDT_TOKEN_ADDRESS_POL;
-
     case "ethereum":
+    case "eth":
     case "sepolia":
       return process.env.USDT_TOKEN_ADDRESS_ETH;
-
+    case "polygon":
+    case "matic":
+      return process.env.USDT_TOKEN_ADDRESS_POL;
     case "sonic":
-      return process.env.VITE_OCC_TOKEN_ADDRESS;
+      return process.env.OCC_TOKEN_ADDRESS_SONIC;
     case "base":
       return process.env.USDT_TOKEN_ADDRESS_BASE;
-
-
     default:
       throw new Error(`USDT not configured for chain: ${chain}`);
   }
 }
 
-// const getUSDTAddress = (chain) => {
-//   const usdtMap = {
-//     'ethereum': process.env.USDT_TOKEN_ADDRESS_ETH || '0xdAC17F958D2ee523a2206206994597C13D831ec7',
-//     'polygon': process.env.USDT_TOKEN_ADDRESS_POL || '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
-//     'sonic': process.env.USDT_TOKEN_ADDRESS_SONIC || '0xa4AB1A20c710cc956B72fe4C57b65613d1Bb8727',
-//     'base': process.env.USDT_TOKEN_ADDRESS_BASE || '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
-//   };
-  
-//   const address = usdtMap[chain?.toLowerCase()];
-//   if (!address) {
-//     throw new Error(`USDT address not configured for chain: ${chain}`);
-//   }
-//   return address;
-// };
-
 exports.createTokenFlow = async (req, res) => {
   try {
     const {
-      name,
-      symbol,
-      supply,
-      description,
-      tagline,
-      projectCategory,
-      chain,
-      tokenAddress,
-      creatorWallet,
-      feePaid,
-      feeTxHash,
-      website,
-      twitter,
-      telegram,
-      discord
+      name, symbol, supply, description, tagline, projectCategory,
+      chain, tokenAddress, creatorWallet, feePaid, feeTxHash,
+      website, twitter, telegram, discord
     } = req.body;
-    console.log('req body' , req.body);
-    // ✅ STEP 1: DUPLICATE CHECK (CORRECT FUNCTION)
-    const existingToken = await Token.findByAddress(tokenAddress, chain);
 
-    if (existingToken) {
-      return res.status(409).json({
-        success: false,
-        error: "Token already exists",
-        token: existingToken,
-      });
-    }
-    // Validate chain
+    console.log("req body", req.body);
+
     if (!chain) {
-      return res.status(400).json({
-        success: false,
-        error: 'Chain is required'
-      });
+      return res.status(400).json({ success: false, error: "Chain is required" });
     }
 
-    // 👇 IMAGE PATH
-    let logoPath = null;
-    if (req.file) {
-      logoPath = `/uploads/tokens/${req.file.filename}`;
+    const normalizedChain = String(chain).toLowerCase().trim();
+
+    // Duplicate check
+    const existingToken = await Token.findByAddress(tokenAddress, normalizedChain);
+    if (existingToken) {
+      return res.status(409).json({ success: false, error: "Token already exists", token: existingToken });
     }
-    console.log("log chain:", chain);
+
+    const logoPath = req.file ? `/uploads/tokens/${req.file.filename}` : null;
+
     const token = await Token.create({
       userId: req.user?.id || null,
-      name,
-      symbol,
-      supply,
-      description,
-      tagline,
-      projectCategory,
-      chain,
-      tokenAddress,
-      creatorWallet,
-      feePaid,
-      feeTxHash,
-      logo: logoPath, // 👈 DB me save
-      website,
-      twitter,
-      telegram,
-      discord
+      name, symbol, supply, description, tagline, projectCategory,
+      chain: normalizedChain, tokenAddress, creatorWallet,
+      feePaid, feeTxHash, logo: logoPath,
+      website, twitter, telegram, discord
     });
 
-    // Get the correct dex service based on chain
-    const normalizedChain = String(chain).toLowerCase().trim();
-    console.log("SELECTING DEX SERVICE FOR CHAIN:", normalizedChain);
-    const dexService = getDexService(normalizedChain);
+    const DEV_WALLET     = process.env.DEV_WALLET;
+    const BURN_WALLET    = process.env.BURN_WALLET;
+    const TREGIDY_WALLET = process.env.TREGIDY_WALLET;
+
+    if (!DEV_WALLET || !BURN_WALLET || !TREGIDY_WALLET) {
+      return res.status(500).json({ success: false, error: "Wallet env vars not configured" });
+    }
+
+    const dexService  = getDexService(normalizedChain);
     const usdtAddress = getUSDTAddress(normalizedChain);
 
+    // liquidityTokenAmount = 50% of total supply (new token side)
+    // usdtLiquidityAmount  = fee the user paid in USDT/OCC (that's what backend wallet holds)
+    const liquidityTokenAmount = (Number(supply) * 50) / 100;
+    const devAmount            = (Number(supply) * 20) / 100;
+    const burnAmount           = (Number(supply) * 30) / 100;
+    const usdtLiquidityAmount  = Number(feePaid) || 0;
 
-    console.log('dexService selected:', dexService === dexServiceEth ? 'ETH' : dexService === dexServicePol ? 'POLYGON' : dexService === dexServiceSonic ? 'SONIC' : 'BASE');
-    
-    const tokenb = supply*50/100; // 50% of total supply
-    console.log("Set liquidity perameter:", usdtAddress, tokenAddress, supply, tokenb);
+    console.log("Token distribution:", { liquidityTokenAmount, devAmount, burnAmount, usdtLiquidityAmount });
+
+    // 1️⃣ 50% token + feePaid USDT → Liquidity + LP Lock
     const liquidity = await dexService.autoLiquidityAndLock(
-      usdtAddress, // USDT address for this chain
-      req.body.tokenAddress,
-      // 3,3
-      supply,
-      tokenb.toString()
+      usdtAddress,
+      tokenAddress,
+      usdtLiquidityAmount.toString(),
+      liquidityTokenAmount.toString(),
+      TREGIDY_WALLET
     );
+
     if (!liquidity.success) {
-      return res.status(400).json({
-        errorType: liquidity.errorType,
-        userMessage: liquidity.userMessage
-      });
+      return res.status(400).json({ errorType: liquidity.errorType, userMessage: liquidity.userMessage });
     }
     console.log("DEX LIQUIDITY RESULT:", liquidity);
-    console.log("DEX LIQUIDITY RESULT:", liquidity.liquidityTx, liquidity.pairAddress, liquidity.lpLocked, liquidity.lockTx);
+
+    // 2️⃣ 20% → Developer wallet
+    const devTxHash = await transferTokenOnChain(normalizedChain, tokenAddress, DEV_WALLET, devAmount);
+    console.log("DEV transfer tx:", devTxHash);
+
+    // 3️⃣ 30% → Burn wallet
+    const burnTxHash = await transferTokenOnChain(normalizedChain, tokenAddress, BURN_WALLET, burnAmount);
+    console.log("BURN transfer tx:", burnTxHash);
+
     await Token.update(token.id, {
-      liquidityResponse: liquidity,
+      liquidityResponse: {
+        ...liquidity,
+        devTxHash,
+        burnTxHash,
+        tregidyWallet: TREGIDY_WALLET,
+        devWallet: DEV_WALLET,
+        burnWallet: BURN_WALLET,
+        distribution: { liquidity: "50%", dev: "20%", burn: "30%" }
+      },
       status: "COMPLETED",
       lpLocked: liquidity.lockTx != null ? 1 : 0,
-      // lpLockedRaw: liquidity.lockTx, // Store raw lockTx for reference
-    });
-
-
-    res.json({ success: true, token });
-
-  } catch (e) {
-    console.error('CREATE TOKEN FLOW ERROR:', e);
-    
-    // Send detailed DEX error to frontend popup
-    console.error("DEX ERROR:", e);
-
-    return res.status(400).json({
-      error: "LIQUIDITY_FAILED",
-      code: e.code || "DEX_ERROR",
-    });
-
-  }
-};
-// 🔹 GET ALL LAUNCHED TOKENS
-exports.getAllTokens = async (req, res) => {
-  try {
-    console.log('Fetching all tokens for launchpad');
-    const tokens = await Token.findAll({
-      attributes: [
-        "id",
-        "name",
-        "symbol",
-        "supply",
-        "chain",
-        "tokenAddress",
-        "creatorWallet",
-        "feePaid",
-        "pairAddress",
-        "lpLocked",
-        "status",
-        "createdAt",
-        "liquidityResponse",
-      ],
-      order: [["id", "DESC"]],
-    });
-
-    return res.json({
-      success: true,
-      total: tokens.length,
-      data: tokens,
-    });
-  } catch (error) {
-    console.error("Get tokens error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch tokens",
-    });
-  }
-};
-
-
-exports.getLaunchpadTokens = async (req, res) => {
-  console.log('Fetching launchpad tokens with query:', req.query);
-  try {
-    const { type = "all", search = "" } = req.query;
-    console.log(`search query received: "${search}" of type ${typeof search}`);
-    const now = new Date();
-    const before24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-
-    let where = {};
-    let include = [];
-    let limit = 20;
-
-    // 🔹 SEARCH FILTER
-    const trimmedSearch = String(search || "").trim();
-    if (trimmedSearch) {
-      const searchTerm = `%${trimmedSearch}%`;
-      where[Op.or] = [
-        { name: { [Op.iLike]: searchTerm } },
-        { symbol: { [Op.iLike]: searchTerm } },
-        { description: { [Op.iLike]: searchTerm } },
-      ];
-    }
-    console.log("Fetch tokens with type:", type, "search:", trimmedSearch, "where:", where);
-
-    // 🔹 NEW COINS (last 24h)
-    if (type === "new") {
-      where.createdAt = { [Op.gte]: before24h };
-    }
-
-    // 🔹 OLD COINS (older than 24h)
-    if (type === "old") {
-      where.createdAt = { [Op.lt]: before24h };
-    }
-
-    if(type === "6") {
-      limit = 6;
-    }
-    console.log("Fetch tokens with type:", type, "search:", search, "where:", where, "limit:", limit);
-    // 🔹 LAST TRADE (joined with swaps)
-    if (type === "trade") {
-      include.push({
-        model: TokenSwap,
-        attributes: [],
-        required: true, // INNER JOIN
-      });
-    }
-
-    const tokens = await Token.findAll({
-      where,
-      include,
-      attributes: [
-        "id",
-        "name",
-        "symbol",
-        "description",
-        "logo",
-        "tokenAddress",
-        "createdAt",
-        "liquidityResponse",
-      ],
-      order: [["createdAt", "DESC"]],
-      limit: limit,
-      distinct: true,
-      logging: console.log,
     });
 
     res.json({
       success: true,
-      data: tokens,
+      token,
+      distribution: { liquidityTokenAmount, devAmount, burnAmount, usdtLiquidityAmount, devTxHash, burnTxHash }
     });
-  } catch (err) {
-    console.error("LAUNCHPAD TOKENS ERROR:", err);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch tokens",
+
+  } catch (e) {
+    console.error("CREATE TOKEN FLOW ERROR:", e);
+    return res.status(400).json({
+      error: "LIQUIDITY_FAILED",
+      code: e.code || "DEX_ERROR",
+      userMessage: e.message
     });
   }
 };
 
+exports.getAllTokens = async (req, res) => {
+  try {
+    const result = await db.pool.query(
+      `SELECT id, name, symbol, supply, chain, "tokenAddress", "creatorWallet",
+              "feePaid", "pairAddress", "lpLocked", status, "createdAt", "liquidityResponse"
+       FROM tokens ORDER BY id DESC`
+    );
+    return res.json({ success: true, total: result.rows.length, data: result.rows });
+  } catch (error) {
+    console.error("Get tokens error:", error);
+    return res.status(500).json({ success: false, message: "Failed to fetch tokens" });
+  }
+};
+
+exports.getLaunchpadTokens = async (req, res) => {
+  try {
+    const { type = "all", search = "" } = req.query;
+    const trimmedSearch = String(search || "").trim();
+    const limit = type === "6" ? 6 : 20;
+
+    const params = [];
+    const conditions = [];
+
+    if (trimmedSearch) {
+      params.push(`%${trimmedSearch}%`);
+      const i = params.length;
+      conditions.push(`(name ILIKE $${i} OR symbol ILIKE $${i} OR description ILIKE $${i})`);
+    }
+
+    if (type === "new") {
+      params.push(new Date(Date.now() - 24 * 60 * 60 * 1000));
+      conditions.push(`"createdAt" >= $${params.length}`);
+    } else if (type === "old") {
+      params.push(new Date(Date.now() - 24 * 60 * 60 * 1000));
+      conditions.push(`"createdAt" < $${params.length}`);
+    } else if (type === "trade") {
+      conditions.push(`EXISTS (SELECT 1 FROM token_swaps ts WHERE ts."tokenAddress" = tokens."tokenAddress")`);
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+    params.push(limit);
+
+    const result = await db.pool.query(
+      `SELECT id, name, symbol, description, logo, "tokenAddress", "createdAt", "liquidityResponse"
+       FROM tokens ${where} ORDER BY "createdAt" DESC LIMIT $${params.length}`,
+      params
+    );
+
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error("LAUNCHPAD TOKENS ERROR:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch tokens" });
+  }
+};
 
 exports.getTokenByAddress = async (req, res) => {
   try {
     const { address } = req.params;
-
     const token = await Token.findByAddress(address);
-
     if (!token) {
-      return res.status(404).json({
-        success: false,
-        message: "Token not found",
-      });
+      return res.status(404).json({ success: false, message: "Token not found" });
     }
-
-    res.json({
-      success: true,
-      data: token,
-    });
+    res.json({ success: true, data: token });
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message,
-    });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
