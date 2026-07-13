@@ -36,6 +36,10 @@ app.use(express.json());
 // Enable CORS
 app.use(cors());
 
+// Trust the first proxy hop (Render's reverse proxy / load balancer).
+// Required so express-rate-limit can correctly read X-Forwarded-For headers.
+app.set('trust proxy', 1);
+
 // 🔒 GLOBAL RATE LIMIT (API protection)
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
