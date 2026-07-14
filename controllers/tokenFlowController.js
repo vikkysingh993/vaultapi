@@ -74,7 +74,7 @@ exports.createTokenFlow = async (req, res) => {
   try {
     const {
       name, symbol, supply, description, tagline, projectCategory,
-      chain, tokenAddress, creatorWallet, feePaid, feeTxHash,
+      chain, tokenAddress, creatorWallet, feePaid, feeTxHash, feeType,
       website, twitter, telegram, discord
     } = req.body;
 
@@ -119,22 +119,29 @@ exports.createTokenFlow = async (req, res) => {
     const devAmount            = (Number(supply) * 20) / 100;
     const burnAmount           = (Number(supply) * 30) / 100;
     const usdtLiquidityAmount  = Number(feePaid) || 0;
+    const isFree               = feeType === "FREE" || usdtLiquidityAmount === 0;
 
-    console.log("Token distribution:", { liquidityTokenAmount, devAmount, burnAmount, usdtLiquidityAmount });
+    console.log("Token distribution:", { liquidityTokenAmount, devAmount, burnAmount, usdtLiquidityAmount, isFree });
 
-    // 1️⃣ 50% token + feePaid USDT → Liquidity + LP Lock
-    const liquidity = await dexService.autoLiquidityAndLock(
-      usdtAddress,
-      tokenAddress,
-      usdtLiquidityAmount.toString(),
-      liquidityTokenAmount.toString(),
-      TREGIDY_WALLET
-    );
+    // 1️⃣ 50% token + feePaid OCC/USDT → Liquidity + LP Lock (skip if free deployment)
+    let liquidity = { success: true, skipped: true, lockTx: null };
 
-    if (!liquidity.success) {
-      return res.status(400).json({ errorType: liquidity.errorType, userMessage: liquidity.userMessage });
+    if (!isFree) {
+      liquidity = await dexService.autoLiquidityAndLock(
+        usdtAddress,
+        tokenAddress,
+        usdtLiquidityAmount.toString(),
+        liquidityTokenAmount.toString(),
+        TREGIDY_WALLET
+      );
+
+      if (!liquidity.success) {
+        return res.status(400).json({ errorType: liquidity.errorType, userMessage: liquidity.userMessage });
+      }
+      console.log("DEX LIQUIDITY RESULT:", liquidity);
+    } else {
+      console.log("⚡ FREE deployment — skipping liquidity, distributing all tokens directly");
     }
-    console.log("DEX LIQUIDITY RESULT:", liquidity);
 
     // 2️⃣ 20% → Developer wallet
     const devTxHash = await transferTokenOnChain(normalizedChain, tokenAddress, DEV_WALLET, devAmount);
@@ -144,15 +151,23 @@ exports.createTokenFlow = async (req, res) => {
     const burnTxHash = await transferTokenOnChain(normalizedChain, tokenAddress, BURN_WALLET, burnAmount);
     console.log("BURN transfer tx:", burnTxHash);
 
+    // 4️⃣ FREE only: send the 50% liquidity portion to TREGIDY_WALLET instead
+    let tregidyTxHash = null;
+    if (isFree) {
+      tregidyTxHash = await transferTokenOnChain(normalizedChain, tokenAddress, TREGIDY_WALLET, liquidityTokenAmount);
+      console.log("TREGIDY transfer tx (free):", tregidyTxHash);
+    }
+
     await Token.update(token.id, {
       liquidityResponse: {
         ...liquidity,
         devTxHash,
         burnTxHash,
+        tregidyTxHash,
         tregidyWallet: TREGIDY_WALLET,
         devWallet: DEV_WALLET,
         burnWallet: BURN_WALLET,
-        distribution: { liquidity: "50%", dev: "20%", burn: "30%" }
+        distribution: { liquidity: isFree ? "0% (free)" : "50%", dev: "20%", burn: "30%" }
       },
       status: "COMPLETED",
       lpLocked: liquidity.lockTx != null ? 1 : 0,
@@ -161,7 +176,7 @@ exports.createTokenFlow = async (req, res) => {
     res.json({
       success: true,
       token,
-      distribution: { liquidityTokenAmount, devAmount, burnAmount, usdtLiquidityAmount, devTxHash, burnTxHash }
+      distribution: { liquidityTokenAmount, devAmount, burnAmount, usdtLiquidityAmount, devTxHash, burnTxHash, tregidyTxHash }
     });
 
   } catch (e) {
