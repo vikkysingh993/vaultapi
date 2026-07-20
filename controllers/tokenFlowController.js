@@ -247,7 +247,11 @@ exports.getLaunchpadTokens = async (req, res) => {
 exports.getTokenByAddress = async (req, res) => {
   try {
     const { address } = req.params;
-    const token = await Token.findByAddress(address);
+    const result = await db.pool.query(
+      `SELECT * FROM tokens WHERE "tokenAddress" = $1 LIMIT 1`,
+      [address]
+    );
+    const token = result.rows[0];
     if (!token) {
       return res.status(404).json({ success: false, message: "Token not found" });
     }
