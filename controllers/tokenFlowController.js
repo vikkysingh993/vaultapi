@@ -94,6 +94,7 @@ exports.createTokenFlow = async (req, res) => {
 
     const logoPath = req.file ? `/uploads/tokens/${req.file.filename}` : null;
 
+    // Save token record immediately so it exists even if later steps fail
     const token = await Token.create({
       userId: req.user?.id || null,
       name, symbol, supply, description, tagline, projectCategory,
@@ -113,61 +114,70 @@ exports.createTokenFlow = async (req, res) => {
     const dexService  = getDexService(normalizedChain);
     const usdtAddress = getUSDTAddress(normalizedChain);
 
-    // liquidityTokenAmount = 50% of total supply (new token side)
-    // usdtLiquidityAmount  = fee the user paid in USDT/OCC (that's what backend wallet holds)
-    const liquidityTokenAmount = (Number(supply) * 50) / 100;
-    const devAmount            = (Number(supply) * 20) / 100;
-    const burnAmount           = (Number(supply) * 30) / 100;
+    // Token distribution split
+    const liquidityTokenAmount = (Number(supply) * 50) / 100; // 50% → liquidity pool
+    const devAmount            = (Number(supply) * 20) / 100; // 20% → dev wallet
+    const burnAmount           = (Number(supply) * 30) / 100; // 30% → burn wallet
     const usdtLiquidityAmount  = Number(feePaid) || 0;
-    const isFree               = feeType === "FREE" || usdtLiquidityAmount === 0;
 
-    console.log("Token distribution:", { liquidityTokenAmount, devAmount, burnAmount, usdtLiquidityAmount, isFree });
-
-    // 1️⃣ 50% token + feePaid OCC/USDT → Liquidity + LP Lock (skip if free deployment)
-    let liquidity = { success: true, skipped: true, lockTx: null };
-
-    if (!isFree) {
-      liquidity = await dexService.autoLiquidityAndLock(
-        usdtAddress,
-        tokenAddress,
-        usdtLiquidityAmount.toString(),
-        liquidityTokenAmount.toString(),
-        TREGIDY_WALLET
-      );
-
-      if (!liquidity.success) {
-        return res.status(400).json({ errorType: liquidity.errorType, userMessage: liquidity.userMessage });
-      }
-      console.log("DEX LIQUIDITY RESULT:", liquidity);
-    } else {
-      console.log("⚡ FREE deployment — skipping liquidity, distributing all tokens directly");
+    if (feeType === "FREE" || usdtLiquidityAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: "LIQUIDITY_FEE_REQUIRED",
+        userMessage: "Liquidity fee is required before token distribution. Please retry the launch and approve the fee transfer."
+      });
     }
 
-    // 2️⃣ 20% → Developer wallet
+    console.log("Token distribution:", { liquidityTokenAmount, devAmount, burnAmount, usdtLiquidityAmount });
+
+    // ===========================================================
+    // STEP 1: Liquidity + LP Lock
+    //   a) approve(USDT/OCC → router)  — done inside autoLiquidityAndLock
+    //   b) addLiquidity(fee token + 50% new token)
+    //   c) approve(LP → lock contract)
+    //   d) createLock(LP tokens)
+    // ===========================================================
+    // The user already transferred the fee to BACKEND_WALLET on the frontend.
+    // The backend wallet therefore holds the USDT/OCC ready for liquidity.
+    const liquidity = await dexService.autoLiquidityAndLock(
+      usdtAddress,          // tokenA: fee token (USDT or OCC)
+      tokenAddress,         // tokenB: newly deployed token
+      usdtLiquidityAmount.toString(), // amountA: fee paid
+      liquidityTokenAmount.toString(),// amountB: 50% of supply
+      TREGIDY_WALLET        // LP recipient after lock
+    );
+
+    if (!liquidity.success) {
+      return res.status(400).json({ errorType: liquidity.errorType, userMessage: liquidity.userMessage });
+    }
+    console.log("DEX LIQUIDITY RESULT:", liquidity);
+
+    // ===========================================================
+    // STEP 2: Token distribution  (runs AFTER liquidity is locked)
+    //   e) transfer(20% → DEV_WALLET)
+    //   f) transfer(30% → BURN_WALLET)
+    // ===========================================================
+
+    // 20% → Developer wallet
     const devTxHash = await transferTokenOnChain(normalizedChain, tokenAddress, DEV_WALLET, devAmount);
     console.log("DEV transfer tx:", devTxHash);
 
-    // 3️⃣ 30% → Burn wallet
+    // 30% → Burn wallet
     const burnTxHash = await transferTokenOnChain(normalizedChain, tokenAddress, BURN_WALLET, burnAmount);
     console.log("BURN transfer tx:", burnTxHash);
 
-    // 4️⃣ FREE only: send the 50% liquidity portion to TREGIDY_WALLET instead
-    let tregidyTxHash = null;
-    if (isFree) {
-      tregidyTxHash = await transferTokenOnChain(normalizedChain, tokenAddress, TREGIDY_WALLET, liquidityTokenAmount);
-      console.log("TREGIDY transfer tx (free):", tregidyTxHash);
-    }
-
+    // ===========================================================
+    // STEP 3: Update DB record with full result
+    // ===========================================================
     await Token.update(token.id, {
       liquidityResponse: {
         ...liquidity,
         devTxHash,
         burnTxHash,
-        tregidyTxHash,
         tregidyWallet: TREGIDY_WALLET,
         devWallet: DEV_WALLET,
         burnWallet: BURN_WALLET,
-        distribution: { liquidity: isFree ? "0% (free)" : "50%", dev: "20%", burn: "30%" }
+        distribution: { liquidity: "50%", dev: "20%", burn: "30%" }
       },
       status: "COMPLETED",
       lpLocked: liquidity.lockTx != null ? 1 : 0,
@@ -176,7 +186,7 @@ exports.createTokenFlow = async (req, res) => {
     res.json({
       success: true,
       token,
-      distribution: { liquidityTokenAmount, devAmount, burnAmount, usdtLiquidityAmount, devTxHash, burnTxHash, tregidyTxHash }
+      distribution: { liquidityTokenAmount, devAmount, burnAmount, usdtLiquidityAmount, devTxHash, burnTxHash }
     });
 
   } catch (e) {
@@ -205,10 +215,53 @@ exports.getAllTokens = async (req, res) => {
 
 exports.getLaunchpadTokens = async (req, res) => {
   try {
-    const { type = "all", search = "" } = req.query;
+    const { type = "all", search = "", walletAddress = "" } = req.query;
     const trimmedSearch = String(search || "").trim();
-    const limit = type === "6" ? 6 : 20;
 
+    // --- Trending: coins with actual swap (buy/sell) activity ---
+    if (type === "trending") {
+      const trendingQuery = `
+        SELECT t.id, t.name, t.symbol, t.description, t.tagline, t.logo,
+               t."tokenAddress", t."createdAt", t."liquidityResponse",
+               MAX(ts."createdAt") AS "lastSwapAt"
+        FROM tokens t
+        INNER JOIN token_swaps ts
+          ON ts."tokenIn" = t."tokenAddress"
+          OR ts."tokenOut" = t."tokenAddress"
+        GROUP BY t.id
+        ORDER BY "lastSwapAt" DESC
+        LIMIT 10
+      `;
+      const result = await db.pool.query(trendingQuery);
+      return res.json({ success: true, data: result.rows });
+    }
+
+    // --- Last trade: coins the user recently traded ---
+    if (type === "trade") {
+      const wallet = String(walletAddress || "").trim();
+      if (!wallet) {
+        return res.json({ success: true, data: [] });
+      }
+      const tradeQuery = `
+        SELECT DISTINCT ON (t.id)
+               t.id, t.name, t.symbol, t.description, t.tagline, t.logo,
+               t."tokenAddress", t."createdAt", t."liquidityResponse",
+               ts."createdAt" AS "lastTradeAt"
+        FROM tokens t
+        INNER JOIN token_swaps ts
+          ON (ts."tokenIn" = t."tokenAddress" OR ts."tokenOut" = t."tokenAddress")
+        WHERE ts."walletAddress" = $1
+        ORDER BY t.id, ts."createdAt" DESC
+      `;
+      const raw = await db.pool.query(tradeQuery, [wallet]);
+      // Sort by lastTradeAt DESC and limit 20
+      const sorted = raw.rows
+        .sort((a, b) => new Date(b.lastTradeAt) - new Date(a.lastTradeAt))
+        .slice(0, 20);
+      return res.json({ success: true, data: sorted });
+    }
+
+    // --- Standard types: all, new, old, 6 ---
     const params = [];
     const conditions = [];
 
@@ -218,22 +271,25 @@ exports.getLaunchpadTokens = async (req, res) => {
       conditions.push(`(name ILIKE $${i} OR symbol ILIKE $${i} OR description ILIKE $${i})`);
     }
 
+    let orderBy = '"createdAt" DESC';
+    let limitClause = '';
+
     if (type === "new") {
-      params.push(new Date(Date.now() - 24 * 60 * 60 * 1000));
-      conditions.push(`"createdAt" >= $${params.length}`);
+      orderBy = '"createdAt" DESC';
+      limitClause = 'LIMIT 20';
     } else if (type === "old") {
-      params.push(new Date(Date.now() - 24 * 60 * 60 * 1000));
-      conditions.push(`"createdAt" < $${params.length}`);
-    } else if (type === "trade") {
-      conditions.push(`EXISTS (SELECT 1 FROM token_swaps ts WHERE ts."tokenAddress" = tokens."tokenAddress")`);
+      orderBy = '"createdAt" ASC';
+      limitClause = 'LIMIT 20';
+    } else if (type === "6") {
+      limitClause = 'LIMIT 6';
     }
+    // type === "all" => no limit, DESC order (defaults)
 
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-    params.push(limit);
 
     const result = await db.pool.query(
-      `SELECT id, name, symbol, description, logo, "tokenAddress", "createdAt", "liquidityResponse"
-       FROM tokens ${where} ORDER BY "createdAt" DESC LIMIT $${params.length}`,
+      `SELECT id, name, symbol, description, tagline, logo, "tokenAddress", "createdAt", "liquidityResponse"
+       FROM tokens ${where} ORDER BY ${orderBy} ${limitClause}`,
       params
     );
 

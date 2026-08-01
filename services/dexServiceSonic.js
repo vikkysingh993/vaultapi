@@ -108,12 +108,11 @@ export const autoLiquidityAndLock = async (A, B, amtA, amtB, treasuryWallet) => 
     if (lpBalance === 0n) throw new Error("LP balance zero after liquidity add");
     console.log("💰 LP Balance:", lpBalance.toString());
 
-    const lpAllowance = await lp.allowance(wallet.address, LOCK_CONTRACT);
-    if (lpAllowance < lpBalance) {
-      console.log("🔐 Approving LP for Lock...");
-      await (await lp.approve(LOCK_CONTRACT, lpBalance)).wait();
-    }
-    console.log("✅ LP approved for lock contract", LOCK_CONTRACT);
+    console.log("🔐 Approving LP for Lock...");
+    const lpApproveTx = await lp.approve(LOCK_CONTRACT, lpBalance);
+    console.log("📨 LP approve tx:", lpApproveTx.hash);
+    const lpApproveReceipt = await lpApproveTx.wait();
+    console.log("✅ LP approved for lock contract", LOCK_CONTRACT, lpApproveReceipt.hash);
 
     const locker = new ethers.Contract(LOCK_CONTRACT, LOCK_ABI, wallet);
     const symbol = await tokenA.symbol();
