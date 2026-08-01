@@ -218,7 +218,7 @@ exports.getLaunchpadTokens = async (req, res) => {
     const { type = "all", search = "", walletAddress = "" } = req.query;
     const trimmedSearch = String(search || "").trim();
 
-    // --- Trending: coins with actual swap (buy/sell) activity ---
+    // --- Trending: coins with actual swap (buy/sell) activity in the last 7 days ---
     if (type === "trending") {
       const trendingQuery = `
         SELECT t.id, t.name, t.symbol, t.description, t.tagline, t.logo,
@@ -228,6 +228,7 @@ exports.getLaunchpadTokens = async (req, res) => {
         INNER JOIN token_swaps ts
           ON ts."tokenIn" = t."tokenAddress"
           OR ts."tokenOut" = t."tokenAddress"
+        WHERE ts."createdAt" >= NOW() - INTERVAL '7 days'
         GROUP BY t.id
         ORDER BY "lastSwapAt" DESC
         LIMIT 10
