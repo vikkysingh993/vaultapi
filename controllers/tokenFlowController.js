@@ -218,11 +218,30 @@ exports.getLaunchpadTokens = async (req, res) => {
     const { type = "all", search = "", walletAddress = "" } = req.query;
     const trimmedSearch = String(search || "").trim();
 
+    // Fetch global market cap multiplier
+    let multiplier = 1.0;
+    try {
+      const setRes = await db.pool.query('SELECT "marketCapMultiplier" FROM settings LIMIT 1');
+      if (setRes.rows[0] && setRes.rows[0].marketCapMultiplier) {
+        multiplier = parseFloat(setRes.rows[0].marketCapMultiplier);
+      }
+    } catch (e) { console.error(e); }
+
+    const formatTokens = (rows) => rows.map(t => {
+      let marketCap = "0";
+      if (t.liquidityResponse && t.liquidityResponse.lpAmount) {
+        const lp = parseFloat(t.liquidityResponse.lpAmount) / 1e18;
+        const supply = parseFloat(t.supply || 0);
+        marketCap = (lp * supply * multiplier).toFixed(2);
+      }
+      return { ...t, marketCap };
+    });
+
     // --- Trending: coins with actual swap (buy/sell) activity in the last 7 days ---
     if (type === "trending") {
       const trendingQuery = `
         SELECT t.id, t.name, t.symbol, t.description, t.tagline, t.logo,
-               t."tokenAddress", t."createdAt", t."liquidityResponse",
+               t."tokenAddress", t."createdAt", t."liquidityResponse", t.supply,
                MAX(ts."createdAt") AS "lastSwapAt"
         FROM tokens t
         INNER JOIN token_swaps ts
@@ -234,7 +253,7 @@ exports.getLaunchpadTokens = async (req, res) => {
         LIMIT 10
       `;
       const result = await db.pool.query(trendingQuery);
-      return res.json({ success: true, data: result.rows });
+      return res.json({ success: true, data: formatTokens(result.rows) });
     }
 
     // --- Last trade: coins the user recently traded ---
@@ -246,7 +265,7 @@ exports.getLaunchpadTokens = async (req, res) => {
       const tradeQuery = `
         SELECT DISTINCT ON (t.id)
                t.id, t.name, t.symbol, t.description, t.tagline, t.logo,
-               t."tokenAddress", t."createdAt", t."liquidityResponse",
+               t."tokenAddress", t."createdAt", t."liquidityResponse", t.supply,
                ts."createdAt" AS "lastTradeAt"
         FROM tokens t
         INNER JOIN token_swaps ts
@@ -259,7 +278,7 @@ exports.getLaunchpadTokens = async (req, res) => {
       const sorted = raw.rows
         .sort((a, b) => new Date(b.lastTradeAt) - new Date(a.lastTradeAt))
         .slice(0, 20);
-      return res.json({ success: true, data: sorted });
+      return res.json({ success: true, data: formatTokens(sorted) });
     }
 
     // --- Standard types: all, new, old, 6 ---
@@ -289,12 +308,12 @@ exports.getLaunchpadTokens = async (req, res) => {
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const result = await db.pool.query(
-      `SELECT id, name, symbol, description, tagline, logo, "tokenAddress", "createdAt", "liquidityResponse"
+      `SELECT id, name, symbol, description, tagline, logo, "tokenAddress", "createdAt", "liquidityResponse", supply
        FROM tokens ${where} ORDER BY ${orderBy} ${limitClause}`,
       params
     );
 
-    res.json({ success: true, data: result.rows });
+    res.json({ success: true, data: formatTokens(result.rows) });
   } catch (err) {
     console.error("LAUNCHPAD TOKENS ERROR:", err);
     res.status(500).json({ success: false, message: "Failed to fetch tokens" });
@@ -308,10 +327,29 @@ exports.getTokenByAddress = async (req, res) => {
       `SELECT * FROM tokens WHERE "tokenAddress" = $1 LIMIT 1`,
       [address]
     );
-    const token = result.rows[0];
+    let token = result.rows[0];
     if (!token) {
       return res.status(404).json({ success: false, message: "Token not found" });
     }
+
+    // Calculate Market Cap
+    let multiplier = 1.0;
+    try {
+      const setRes = await db.pool.query('SELECT "marketCapMultiplier" FROM settings LIMIT 1');
+      if (setRes.rows[0] && setRes.rows[0].marketCapMultiplier) {
+        multiplier = parseFloat(setRes.rows[0].marketCapMultiplier);
+      }
+    } catch (e) { console.error(e); }
+
+    let marketCap = "0";
+    if (token.liquidityResponse && token.liquidityResponse.lpAmount) {
+      const lp = parseFloat(token.liquidityResponse.lpAmount) / 1e18;
+      const supply = parseFloat(token.supply || 0);
+      marketCap = (lp * supply * multiplier).toFixed(2);
+    }
+    
+    token = { ...token, marketCap };
+
     res.json({ success: true, data: token });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

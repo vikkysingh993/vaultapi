@@ -6,7 +6,7 @@ const Setting = db.Setting;
  */
 exports.getSettings = async (req, res) => {
   try {
-    const setting = await Setting.findOne({ where: { id: 1 } });
+    const setting = await Setting.findById(1);
 
     return res.json({
       success: true,
@@ -25,7 +25,7 @@ exports.getSettings = async (req, res) => {
  */
 exports.updateSettings = async (req, res) => {
   try {
-    const { tokenFee, processingFee, receiveWallet } = req.body;
+    const { tokenFee, processingFee, receiveWallet, marketCapMultiplier } = req.body;
 
     if (!receiveWallet) {
       return res.status(400).json({
@@ -34,10 +34,7 @@ exports.updateSettings = async (req, res) => {
       });
     }
 
-    await Setting.update(
-      { tokenFee, processingFee, receiveWallet },
-      { where: { id: 1 } }
-    );
+    await Setting.update(1, { tokenFee, processingFee, receiveWallet, marketCapMultiplier });
 
     return res.json({
       success: true,

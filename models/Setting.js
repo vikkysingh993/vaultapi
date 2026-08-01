@@ -8,6 +8,7 @@ const createSettingTable = async () => {
         "tokenFee" DECIMAL(10, 4) NOT NULL,
         "processingFee" DECIMAL(10, 4) NOT NULL,
         "receiveWallet" VARCHAR(100) NOT NULL,
+        "marketCapMultiplier" DECIMAL(10, 4) DEFAULT 1.0,
         "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -20,10 +21,10 @@ const createSettingTable = async () => {
 const Setting = {
   create: async (data) => {
     try {
-      const { tokenFee, processingFee, receiveWallet } = data;
+      const { tokenFee, processingFee, receiveWallet, marketCapMultiplier = 1.0 } = data;
       const result = await pool.query(
-        'INSERT INTO settings ("tokenFee", "processingFee", "receiveWallet") VALUES ($1, $2, $3) RETURNING *',
-        [tokenFee, processingFee, receiveWallet]
+        'INSERT INTO settings ("tokenFee", "processingFee", "receiveWallet", "marketCapMultiplier") VALUES ($1, $2, $3, $4) RETURNING *',
+        [tokenFee, processingFee, receiveWallet, marketCapMultiplier]
       );
       return result.rows[0];
     } catch (error) {
