@@ -5,9 +5,9 @@ const createSettingTable = async () => {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS settings (
         id SERIAL PRIMARY KEY,
-        "tokenFee" DECIMAL(10, 4) NOT NULL,
-        "processingFee" DECIMAL(10, 4) NOT NULL,
-        "receiveWallet" VARCHAR(100) NOT NULL,
+        "tokenFee" DECIMAL(10, 4) NOT NULL DEFAULT 0,
+        "processingFee" DECIMAL(10, 4) NOT NULL DEFAULT 0,
+        "receiveWallet" VARCHAR(100) NOT NULL DEFAULT '',
         "marketCapMultiplier" DECIMAL(10, 4) DEFAULT 1.0,
         "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP

@@ -41,23 +41,39 @@ exports.updateSettings = async (req, res) => {
   try {
     const { tokenFee, processingFee, receiveWallet, marketCapMultiplier } = req.body;
 
-    if (!receiveWallet) {
-      return res.status(400).json({
-        success: false,
-        message: "Wallet address is required",
+    // Check if a settings row exists
+    const existing = await Setting.findById(1);
+
+    if (existing) {
+      // Update only the fields provided (skip undefined)
+      const updateData = {};
+      if (tokenFee !== undefined)           updateData.tokenFee = tokenFee;
+      if (processingFee !== undefined)      updateData.processingFee = processingFee;
+      if (receiveWallet !== undefined)      updateData.receiveWallet = receiveWallet;
+      if (marketCapMultiplier !== undefined) updateData.marketCapMultiplier = marketCapMultiplier;
+
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ success: false, message: "No fields to update" });
+      }
+
+      await Setting.update(1, updateData);
+    } else {
+      // No settings row yet — create one with defaults
+      await Setting.create({
+        tokenFee:            tokenFee            ?? 0,
+        processingFee:       processingFee       ?? 0,
+        receiveWallet:       receiveWallet       ?? "",
+        marketCapMultiplier: marketCapMultiplier ?? 1.0,
       });
     }
 
-    await Setting.update(1, { tokenFee, processingFee, receiveWallet, marketCapMultiplier });
-
-    return res.json({
-      success: true,
-      message: "Settings updated successfully",
-    });
+    return res.json({ success: true, message: "Settings updated successfully" });
   } catch (err) {
+    console.error("UPDATE SETTINGS ERROR:", err);
     return res.status(500).json({
       success: false,
       message: "Failed to update settings",
+      detail: err.message,
     });
   }
 };
