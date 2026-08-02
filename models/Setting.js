@@ -13,6 +13,13 @@ const createSettingTable = async () => {
         "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // Migration: add marketCapMultiplier if it doesn't exist (for existing production tables)
+    await pool.query(`
+      ALTER TABLE settings
+        ADD COLUMN IF NOT EXISTS "marketCapMultiplier" DECIMAL(10, 4) DEFAULT 1.0;
+    `);
+
   } catch (error) {
     console.error('Error creating settings table:', error.message);
   }
