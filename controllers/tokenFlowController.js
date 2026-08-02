@@ -206,7 +206,26 @@ exports.getAllTokens = async (req, res) => {
               "feePaid", "pairAddress", "lpLocked", status, "createdAt", "liquidityResponse"
        FROM tokens ORDER BY id DESC`
     );
-    return res.json({ success: true, total: result.rows.length, data: result.rows });
+
+    let multiplier = 1.0;
+    try {
+      const setRes = await db.pool.query('SELECT "marketCapMultiplier" FROM settings LIMIT 1');
+      if (setRes.rows[0] && setRes.rows[0].marketCapMultiplier) {
+        multiplier = parseFloat(setRes.rows[0].marketCapMultiplier);
+      }
+    } catch (e) { console.error(e); }
+
+    const formattedData = result.rows.map(t => {
+      let marketCap = "0";
+      if (t.liquidityResponse && t.liquidityResponse.lpLocked) {
+        const lp = parseFloat(t.liquidityResponse.lpLocked) / 1e18;
+        const supply = parseFloat(t.supply || 0);
+        marketCap = (lp * supply * multiplier).toFixed(2);
+      }
+      return { ...t, marketCap };
+    });
+
+    return res.json({ success: true, total: formattedData.length, data: formattedData });
   } catch (error) {
     console.error("Get tokens error:", error);
     return res.status(500).json({ success: false, message: "Failed to fetch tokens" });
@@ -229,8 +248,8 @@ exports.getLaunchpadTokens = async (req, res) => {
 
     const formatTokens = (rows) => rows.map(t => {
       let marketCap = "0";
-      if (t.liquidityResponse && t.liquidityResponse.lpAmount) {
-        const lp = parseFloat(t.liquidityResponse.lpAmount) / 1e18;
+      if (t.liquidityResponse && t.liquidityResponse.lpLocked) {
+        const lp = parseFloat(t.liquidityResponse.lpLocked) / 1e18;
         const supply = parseFloat(t.supply || 0);
         marketCap = (lp * supply * multiplier).toFixed(2);
       }
@@ -342,8 +361,8 @@ exports.getTokenByAddress = async (req, res) => {
     } catch (e) { console.error(e); }
 
     let marketCap = "0";
-    if (token.liquidityResponse && token.liquidityResponse.lpAmount) {
-      const lp = parseFloat(token.liquidityResponse.lpAmount) / 1e18;
+    if (token.liquidityResponse && token.liquidityResponse.lpLocked) {
+      const lp = parseFloat(token.liquidityResponse.lpLocked) / 1e18;
       const supply = parseFloat(token.supply || 0);
       marketCap = (lp * supply * multiplier).toFixed(2);
     }

@@ -20,6 +20,20 @@ exports.getSettings = async (req, res) => {
   }
 };
 
+exports.getPublicSettings = async (req, res) => {
+  try {
+    const setting = await Setting.findById(1);
+    return res.json({
+      success: true,
+      data: {
+        marketCapMultiplier: setting ? setting.marketCapMultiplier : 1.0,
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Failed to load public settings" });
+  }
+};
+
 /**
  * PUT /api/admin/settings
  */
