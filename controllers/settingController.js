@@ -41,16 +41,25 @@ exports.updateSettings = async (req, res) => {
   try {
     const { tokenFee, processingFee, receiveWallet, marketCapMultiplier } = req.body;
 
+    // Helper: convert empty string / undefined to null for numeric fields
+    const toNum = (v) => (v === "" || v === undefined || v === null) ? null : parseFloat(v);
+    const toStr = (v) => (v === undefined ? null : v);
+
+    const safeTokenFee           = toNum(tokenFee);
+    const safeProcessingFee      = toNum(processingFee);
+    const safeMarketCapMultiplier = toNum(marketCapMultiplier);
+    const safeReceiveWallet      = toStr(receiveWallet);
+
     // Check if a settings row exists
     const existing = await Setting.findById(1);
 
     if (existing) {
-      // Update only the fields provided (skip undefined)
+      // Only update fields that were actually provided
       const updateData = {};
-      if (tokenFee !== undefined)           updateData.tokenFee = tokenFee;
-      if (processingFee !== undefined)      updateData.processingFee = processingFee;
-      if (receiveWallet !== undefined)      updateData.receiveWallet = receiveWallet;
-      if (marketCapMultiplier !== undefined) updateData.marketCapMultiplier = marketCapMultiplier;
+      if (safeTokenFee !== null)            updateData.tokenFee = safeTokenFee;
+      if (safeProcessingFee !== null)       updateData.processingFee = safeProcessingFee;
+      if (safeReceiveWallet !== null)       updateData.receiveWallet = safeReceiveWallet;
+      if (safeMarketCapMultiplier !== null) updateData.marketCapMultiplier = safeMarketCapMultiplier;
 
       if (Object.keys(updateData).length === 0) {
         return res.status(400).json({ success: false, message: "No fields to update" });
@@ -58,12 +67,12 @@ exports.updateSettings = async (req, res) => {
 
       await Setting.update(1, updateData);
     } else {
-      // No settings row yet — create one with defaults
+      // No settings row yet — create one with safe defaults
       await Setting.create({
-        tokenFee:            tokenFee            ?? 0,
-        processingFee:       processingFee       ?? 0,
-        receiveWallet:       receiveWallet       ?? "",
-        marketCapMultiplier: marketCapMultiplier ?? 1.0,
+        tokenFee:            safeTokenFee            ?? 0,
+        processingFee:       safeProcessingFee       ?? 0,
+        receiveWallet:       safeReceiveWallet       ?? "",
+        marketCapMultiplier: safeMarketCapMultiplier ?? 1.0,
       });
     }
 
