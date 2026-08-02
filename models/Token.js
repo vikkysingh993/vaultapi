@@ -8,8 +8,8 @@ const createTokenTable = async () => {
         "userId" BIGINT,
         name VARCHAR(100) NOT NULL,
         symbol VARCHAR(20) NOT NULL,
-        description VARCHAR(255) NOT NULL,
-        tagline VARCHAR(255),
+        description TEXT NOT NULL,
+        tagline TEXT,
         "projectCategory" VARCHAR(100),
         supply DECIMAL(36, 18) NOT NULL,
         website VARCHAR(255),
@@ -32,6 +32,13 @@ const createTokenTable = async () => {
         "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    // Migration for existing tables: alter column types to TEXT to avoid 255 char limit
+    await pool.query(`
+      ALTER TABLE tokens
+        ALTER COLUMN description TYPE TEXT,
+        ALTER COLUMN tagline TYPE TEXT;
     `);
   } catch (error) {
     console.error('Error creating tokens table:', error.message);
