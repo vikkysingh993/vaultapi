@@ -1,0 +1,9 @@
+/node_modules
+vaultapi.env
+uploads/*
+!uploads/tokens/
+!uploads/tokens/.gitkeep
+!uploads/profile/
+!uploads/profile/.gitkeep
+!uploads/coin-logo/
+!uploads/coin-logo/.gitkeep
