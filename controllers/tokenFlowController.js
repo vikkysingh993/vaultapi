@@ -66,6 +66,74 @@ function getUSDTAddress(chain) {
     case "base":
       return process.env.USDT_TOKEN_ADDRESS_BASE;
     default:
+const db = require('../models');
+const Token = db.Token;
+const { ethers } = require("ethers");
+
+const dexServiceEth = require("../services/dexServiceEth");
+const dexServicePol = require("../services/dexServicePol");
+const dexServiceSonic = require("../services/dexServiceSonic");
+const dexServiceBase = require("../services/dexServiceBase");
+
+const ERC20_TRANSFER_ABI = [
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "function decimals() view returns (uint8)"
+];
+
+const RPC_MAP = {
+  ethereum: process.env.RPC_URL_ETH,
+  eth:      process.env.RPC_URL_ETH,
+  sepolia:  process.env.RPC_URL_ETH,
+  polygon:  process.env.RPC_URL_POL,
+  matic:    process.env.RPC_URL_POL,
+  sonic:    process.env.RPC_URL_SONIC,
+  base:     process.env.RPC_URL_BASE,
+};
+
+async function transferTokenOnChain(chain, tokenAddress, toAddress, amount) {
+  const rpc = RPC_MAP[chain];
+  if (!rpc) throw new Error(`No RPC configured for chain: ${chain}`);
+  const provider = new ethers.JsonRpcProvider(rpc);
+  const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+  const token = new ethers.Contract(tokenAddress, ERC20_TRANSFER_ABI, wallet);
+  const decimals = await token.decimals();
+  const tx = await token.transfer(toAddress, ethers.parseUnits(amount.toString(), decimals));
+  const receipt = await tx.wait();
+  return receipt.hash;
+}
+
+function getDexService(chain) {
+  switch (chain) {
+    case "ethereum":
+    case "eth":
+    case "sepolia":
+      return dexServiceEth;
+    case "polygon":
+    case "matic":
+      return dexServicePol;
+    case "sonic":
+      return dexServiceSonic;
+    case "base":
+      return dexServiceBase;
+    default:
+      throw new Error(`Unsupported chain: "${chain}"`);
+  }
+}
+
+function getUSDTAddress(chain) {
+  switch (chain) {
+    case "ethereum":
+    case "eth":
+    case "sepolia":
+      return process.env.USDT_TOKEN_ADDRESS_ETH;
+    case "polygon":
+    case "matic":
+      return process.env.USDT_TOKEN_ADDRESS_POL;
+    case "sonic":
+      return process.env.OCC_TOKEN_ADDRESS_SONIC;
+    case "base":
+      return process.env.USDT_TOKEN_ADDRESS_BASE;
+    default:
       throw new Error(`USDT not configured for chain: ${chain}`);
   }
 }
@@ -75,6 +143,7 @@ exports.createTokenFlow = async (req, res) => {
     const {
       name, symbol, supply, description, tagline, projectCategory,
       chain, tokenAddress, creatorWallet, feePaid, feeTxHash, feeType,
+      liquidityFeePaid, devFeePaid,
       website, twitter, telegram, discord
     } = req.body;
 
@@ -118,7 +187,8 @@ exports.createTokenFlow = async (req, res) => {
     const liquidityTokenAmount = (Number(supply) * 50) / 100; // 50% → liquidity pool
     const devAmount            = (Number(supply) * 20) / 100; // 20% → dev wallet
     const burnAmount           = (Number(supply) * 30) / 100; // 30% → burn wallet
-    const usdtLiquidityAmount  = Number(feePaid) || 0;
+    const usdtLiquidityAmount  = Number(liquidityFeePaid) || Number(feePaid) || 0;
+    const devFeeAmount         = Number(devFeePaid) || 0;
 
     if (feeType === "FREE" || usdtLiquidityAmount <= 0) {
       return res.status(400).json({
@@ -128,7 +198,7 @@ exports.createTokenFlow = async (req, res) => {
       });
     }
 
-    console.log("Token distribution:", { liquidityTokenAmount, devAmount, burnAmount, usdtLiquidityAmount });
+    console.log("Token distribution:", { liquidityTokenAmount, devAmount, burnAmount, usdtLiquidityAmount, devFeeAmount });
 
     // ===========================================================
     // STEP 1: Liquidity + LP Lock
