@@ -278,19 +278,24 @@ exports.getAllTokens = async (req, res) => {
     );
 
     let multiplier = 1.0;
+    let occyPrice = 1.0;
     try {
-      const setRes = await db.pool.query('SELECT "marketCapMultiplier" FROM settings LIMIT 1');
-      if (setRes.rows[0] && setRes.rows[0].marketCapMultiplier) {
-        multiplier = parseFloat(setRes.rows[0].marketCapMultiplier);
+      const setRes = await db.pool.query('SELECT "marketCapMultiplier", "occyPrice" FROM settings LIMIT 1');
+      if (setRes.rows[0]) {
+        if (setRes.rows[0].marketCapMultiplier) multiplier = parseFloat(setRes.rows[0].marketCapMultiplier);
+        if (setRes.rows[0].occyPrice) occyPrice = parseFloat(setRes.rows[0].occyPrice);
       }
     } catch (e) { console.error(e); }
 
     const formattedData = result.rows.map(t => {
       let marketCap = "0";
       if (t.liquidityResponse && t.liquidityResponse.lpLocked) {
-        const lp = parseFloat(t.liquidityResponse.lpLocked) / 1e18;
         const supply = parseFloat(t.supply || 0);
-        marketCap = (lp * supply * multiplier).toFixed(2);
+        let mCap = multiplier * supply;
+        if (t.chain === 'sonic') {
+          mCap = mCap * occyPrice;
+        }
+        marketCap = mCap.toFixed(2);
       }
       return { ...t, marketCap };
     });
@@ -307,21 +312,26 @@ exports.getLaunchpadTokens = async (req, res) => {
     const { type = "all", search = "", walletAddress = "" } = req.query;
     const trimmedSearch = String(search || "").trim();
 
-    // Fetch global market cap multiplier
+    // Fetch global market cap multiplier and occy price
     let multiplier = 1.0;
+    let occyPrice = 1.0;
     try {
-      const setRes = await db.pool.query('SELECT "marketCapMultiplier" FROM settings LIMIT 1');
-      if (setRes.rows[0] && setRes.rows[0].marketCapMultiplier) {
-        multiplier = parseFloat(setRes.rows[0].marketCapMultiplier);
+      const setRes = await db.pool.query('SELECT "marketCapMultiplier", "occyPrice" FROM settings LIMIT 1');
+      if (setRes.rows[0]) {
+        if (setRes.rows[0].marketCapMultiplier) multiplier = parseFloat(setRes.rows[0].marketCapMultiplier);
+        if (setRes.rows[0].occyPrice) occyPrice = parseFloat(setRes.rows[0].occyPrice);
       }
     } catch (e) { console.error(e); }
 
     const formatTokens = (rows) => rows.map(t => {
       let marketCap = "0";
       if (t.liquidityResponse && t.liquidityResponse.lpLocked) {
-        const lp = parseFloat(t.liquidityResponse.lpLocked) / 1e18;
         const supply = parseFloat(t.supply || 0);
-        marketCap = (lp * supply * multiplier).toFixed(2);
+        let mCap = multiplier * supply;
+        if (t.chain === 'sonic') {
+          mCap = mCap * occyPrice;
+        }
+        marketCap = mCap.toFixed(2);
       }
       return { ...t, marketCap };
     });
@@ -423,18 +433,23 @@ exports.getTokenByAddress = async (req, res) => {
 
     // Calculate Market Cap
     let multiplier = 1.0;
+    let occyPrice = 1.0;
     try {
-      const setRes = await db.pool.query('SELECT "marketCapMultiplier" FROM settings LIMIT 1');
-      if (setRes.rows[0] && setRes.rows[0].marketCapMultiplier) {
-        multiplier = parseFloat(setRes.rows[0].marketCapMultiplier);
+      const setRes = await db.pool.query('SELECT "marketCapMultiplier", "occyPrice" FROM settings LIMIT 1');
+      if (setRes.rows[0]) {
+        if (setRes.rows[0].marketCapMultiplier) multiplier = parseFloat(setRes.rows[0].marketCapMultiplier);
+        if (setRes.rows[0].occyPrice) occyPrice = parseFloat(setRes.rows[0].occyPrice);
       }
     } catch (e) { console.error(e); }
 
     let marketCap = "0";
     if (token.liquidityResponse && token.liquidityResponse.lpLocked) {
-      const lp = parseFloat(token.liquidityResponse.lpLocked) / 1e18;
       const supply = parseFloat(token.supply || 0);
-      marketCap = (lp * supply * multiplier).toFixed(2);
+      let mCap = multiplier * supply;
+      if (token.chain === 'sonic') {
+        mCap = mCap * occyPrice;
+      }
+      marketCap = mCap.toFixed(2);
     }
     
     token = { ...token, marketCap };

@@ -9,15 +9,17 @@ const createSettingTable = async () => {
         "processingFee" DECIMAL(10, 4) NOT NULL DEFAULT 0,
         "receiveWallet" VARCHAR(100) NOT NULL DEFAULT '',
         "marketCapMultiplier" DECIMAL(10, 4) DEFAULT 1.0,
+        "occyPrice" DECIMAL(10, 4) DEFAULT 1.0,
         "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
-    // Migration: add marketCapMultiplier if it doesn't exist (for existing production tables)
+    // Migration: add marketCapMultiplier and occyPrice if they don't exist
     await pool.query(`
       ALTER TABLE settings
-        ADD COLUMN IF NOT EXISTS "marketCapMultiplier" DECIMAL(10, 4) DEFAULT 1.0;
+        ADD COLUMN IF NOT EXISTS "marketCapMultiplier" DECIMAL(10, 4) DEFAULT 1.0,
+        ADD COLUMN IF NOT EXISTS "occyPrice" DECIMAL(10, 4) DEFAULT 1.0;
     `);
 
   } catch (error) {
@@ -28,10 +30,10 @@ const createSettingTable = async () => {
 const Setting = {
   create: async (data) => {
     try {
-      const { tokenFee, processingFee, receiveWallet, marketCapMultiplier = 1.0 } = data;
+      const { tokenFee, processingFee, receiveWallet, marketCapMultiplier = 1.0, occyPrice = 1.0 } = data;
       const result = await pool.query(
-        'INSERT INTO settings ("tokenFee", "processingFee", "receiveWallet", "marketCapMultiplier") VALUES ($1, $2, $3, $4) RETURNING *',
-        [tokenFee, processingFee, receiveWallet, marketCapMultiplier]
+        'INSERT INTO settings ("tokenFee", "processingFee", "receiveWallet", "marketCapMultiplier", "occyPrice") VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        [tokenFee, processingFee, receiveWallet, marketCapMultiplier, occyPrice]
       );
       return result.rows[0];
     } catch (error) {

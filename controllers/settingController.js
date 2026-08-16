@@ -27,6 +27,7 @@ exports.getPublicSettings = async (req, res) => {
       success: true,
       data: {
         marketCapMultiplier: setting ? setting.marketCapMultiplier : 1.0,
+        occyPrice: setting ? setting.occyPrice : 1.0,
       }
     });
   } catch (err) {
@@ -39,7 +40,7 @@ exports.getPublicSettings = async (req, res) => {
  */
 exports.updateSettings = async (req, res) => {
   try {
-    const { tokenFee, processingFee, receiveWallet, marketCapMultiplier } = req.body;
+    const { tokenFee, processingFee, receiveWallet, marketCapMultiplier, occyPrice } = req.body;
 
     // Helper: convert empty string / undefined to null for numeric fields
     const toNum = (v) => (v === "" || v === undefined || v === null) ? null : parseFloat(v);
@@ -48,6 +49,7 @@ exports.updateSettings = async (req, res) => {
     const safeTokenFee           = toNum(tokenFee);
     const safeProcessingFee      = toNum(processingFee);
     const safeMarketCapMultiplier = toNum(marketCapMultiplier);
+    const safeOccyPrice          = toNum(occyPrice);
     const safeReceiveWallet      = toStr(receiveWallet);
 
     // Check if a settings row exists
@@ -60,6 +62,7 @@ exports.updateSettings = async (req, res) => {
       if (safeProcessingFee !== null)       updateData.processingFee = safeProcessingFee;
       if (safeReceiveWallet !== null)       updateData.receiveWallet = safeReceiveWallet;
       if (safeMarketCapMultiplier !== null) updateData.marketCapMultiplier = safeMarketCapMultiplier;
+      if (safeOccyPrice !== null)           updateData.occyPrice = safeOccyPrice;
 
       if (Object.keys(updateData).length === 0) {
         return res.status(400).json({ success: false, message: "No fields to update" });
@@ -73,6 +76,7 @@ exports.updateSettings = async (req, res) => {
         processingFee:       safeProcessingFee       ?? 0,
         receiveWallet:       safeReceiveWallet       ?? "",
         marketCapMultiplier: safeMarketCapMultiplier ?? 1.0,
+        occyPrice:           safeOccyPrice           ?? 1.0,
       });
     }
 
