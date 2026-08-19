@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-// const db = require('../models'); // Assuming 'models' directory exports the db object
+const db = require('../models');
 // const { get } = require('mongoose');
 // const User = db.User;
 
@@ -445,7 +445,8 @@ const updateProfile = async (req, res) => {
   const data = { name, email };
 
   if (req.file) {
-    data.profileImage = `/uploads/profile/${req.file.filename}`;
+    const imageRecord = await db.Image.create(req.file.buffer, req.file.mimetype);
+    data.profileImage = `/api/images/${imageRecord.id}`;
   }
 
   await User.update(req.user.id, data);

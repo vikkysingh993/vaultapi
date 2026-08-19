@@ -1,5 +1,6 @@
 const Coin = require("../models/Coin");
 const User = require("../models/User");
+const db = require("../models");
 
 const MINIMUM_OCC_FOR_FREE_LAUNCH = 1; // 1000 OCC tokens
 const STANDARD_LAUNCH_FEE = 0.1; // Standard fee in SOL or equivalent
@@ -44,7 +45,11 @@ exports.createCoin = async (req, res) => {
       }
     }
 
-    const logo = req.file ? req.file.filename : null;
+    let logo = null;
+    if (req.file) {
+      const imageRecord = await db.Image.create(req.file.buffer, req.file.mimetype);
+      logo = `/api/images/${imageRecord.id}`;
+    }
 
     const coin = await Coin.create({
       token_name,

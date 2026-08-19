@@ -10,6 +10,7 @@ const StaticPage = require('./StaticPage');
 const Setting = require('./Setting');
 const TokenSwap = require('./TokenSwap');
 const Faq = require('./Faq');
+const Image = require('./Image');
 
 // Initialize all tables on startup
 const initializeTables = async () => {
@@ -23,6 +24,7 @@ const initializeTables = async () => {
     await Setting.init();
     await TokenSwap.init();
     await Faq.init();
+    await Image.init();
     console.log('✅ All tables initialized');
   } catch (error) {
     console.error('❌ Error initializing tables:', error.message);
@@ -52,5 +54,6 @@ module.exports = {
   StaticPage,
   Setting,
   TokenSwap,
-  Faq
+  Faq,
+  Image
 };

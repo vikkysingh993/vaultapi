@@ -20,6 +20,7 @@ const dashboardRoutes = require("./routes/dashboardRoutes");
 const adminSettingRoutes = require("./routes/adminSettingRoutes");  
 const swapRoutes = require("./routes/swapRoutes");
 const faqRoutes =  require("./routes/faqRoutes");
+const imageRoutes = require("./routes/imageRoutes");
 
 // Connect to database
 connectDB();
@@ -74,7 +75,7 @@ app.use("/api/admin", dashboardRoutes);
 app.use("/api/admin", adminSettingRoutes);
 app.use("/api/swaps", swapRoutes);
 app.use("/api/admin", faqRoutes);
-app.use("/uploads", express.static("uploads"));
+app.use("/api/images", imageRoutes);
 
 const PORT = process.env.PORT || 5000;
 

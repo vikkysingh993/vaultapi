@@ -93,7 +93,11 @@ exports.createTokenFlow = async (req, res) => {
       return res.status(409).json({ success: false, error: "Token already exists", token: existingToken });
     }
 
-    const logoPath = req.file ? `/uploads/tokens/${req.file.filename}` : null;
+    let logoPath = null;
+    if (req.file) {
+      const imageRecord = await db.Image.create(req.file.buffer, req.file.mimetype);
+      logoPath = `/api/images/${imageRecord.id}`;
+    }
 
     // Save token record immediately so it exists even if later steps fail
     const token = await Token.create({
