@@ -28,6 +28,7 @@ exports.getPublicSettings = async (req, res) => {
       data: {
         marketCapMultiplier: setting ? setting.marketCapMultiplier : 1.0,
         occyPrice: setting ? setting.occyPrice : 1.0,
+        tokenFee: setting ? setting.tokenFee : 5,
       }
     });
   } catch (err) {
